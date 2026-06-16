@@ -79,6 +79,7 @@ class Renderer:
     # -- build --------------------------------------------------------------
     def build(self) -> None:
         os.makedirs(self.outdir, exist_ok=True)
+        self._clean()
         self._copy_assets()
         self._write_search_index()
         self._render_index()
@@ -88,6 +89,18 @@ class Renderer:
             self._render_module(name)
         for name in self.design.packages:
             self._render_package(name)
+
+    def _clean(self) -> None:
+        """Remove artifacts from a previous build so stale pages do not linger.
+
+        Only files this tool generates are removed, never the output dir itself.
+        """
+        for fn in os.listdir(self.outdir):
+            if fn.endswith((".html", ".json")):
+                os.remove(os.path.join(self.outdir, fn))
+        assets = os.path.join(self.outdir, "assets")
+        if os.path.isdir(assets):
+            shutil.rmtree(assets)
 
     def _copy_assets(self) -> None:
         dst = os.path.join(self.outdir, "assets")
@@ -155,12 +168,9 @@ class Renderer:
         mod = self.design.modules[name]
         dot = graphs.internal_dot(self.design, name)
         svg = _responsive(graphs.render_dot(dot)) if dot else None
-        ports = {
-            "in": [p for p in mod.ports if p.direction == "in"],
-            "out": [p for p in mod.ports if p.direction == "out"],
-            "inout": [p for p in mod.ports if p.direction == "inout"],
-            "interface": [p for p in mod.ports if p.is_interface],
-        }
+        ports = {"in": [], "out": [], "inout": []}
+        for p in mod.ports:
+            ports.get(p.eff_dir, ports["inout"]).append(p)
         html = self.env.get_template("module.html").render(
             **self._ctx(mod=mod, ports=ports, internal_svg=svg, active="module")
         )

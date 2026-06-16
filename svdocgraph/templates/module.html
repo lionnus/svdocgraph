@@ -66,24 +66,23 @@
 </section>
 {% endif %}
 
-{% set group_titles = {'in':'Inputs','out':'Outputs','inout':'Bidirectional','interface':'Interfaces'} %}
+{% set group_titles = {'in':'Inputs','out':'Outputs','inout':'Bidirectional'} %}
 {% if mod.ports %}
 <section class="card">
   <h2>Ports <span class="pill">{{ mod.ports|length }}</span></h2>
-  {% for g in ['in','out','inout','interface'] %}
+  {% for g in ['in','out','inout'] %}
   {% if ports[g] %}
   <h3 class="subhead">{{ group_titles[g] }} <span class="muted">{{ ports[g]|length }}</span></h3>
   <div class="tablewrap">
   <table class="ports">
-    <thead><tr><th>Dir</th><th>Name</th><th>Type</th><th class="num">Width</th>{% if g=='interface' %}<th>Modport</th>{% endif %}</tr></thead>
+    <thead><tr><th>Dir</th><th>Name</th><th>Type</th><th class="num">Width</th></tr></thead>
     <tbody>
       {% for p in ports[g] %}
       <tr>
-        <td><span class="dir dir-{{ p.direction }}">{{ p.direction|dirbadge }}</span></td>
+        <td><span class="dir dir-{{ p.eff_dir }}{{ ' dir-if' if p.is_interface }}">{{ p.eff_dir|dirbadge }}</span></td>
         <td class="mono strong">{{ p.name }}</td>
-        <td class="mono ty">{% if p.is_interface %}<a href="module-{{ p.interface }}.html">{{ p.type }}</a>{% else %}{{ p.type }}{% endif %}</td>
+        <td class="mono ty">{% if p.is_interface %}<a href="module-{{ p.interface }}.html">{{ p.interface }}</a>{% if p.modport %} <span class="muted">.{{ p.modport }}</span>{% endif %}{% else %}{{ p.type }}{% endif %}</td>
         <td class="num">{% if p.width %}{{ p.width }}{% else %}-{% endif %}</td>
-        {% if g=='interface' %}<td class="mono muted">{{ p.modport or '-' }}</td>{% endif %}
       </tr>
       {% endfor %}
     </tbody>

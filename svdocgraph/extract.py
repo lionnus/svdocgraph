@@ -151,29 +151,62 @@ def _port_from_symbol(p) -> Port | None:
     )
 
 
-def _conn_info(pc) -> tuple[str, str, bool]:
+def _conn_info(pc, sm) -> tuple[str, str, bool]:
     """Return (net, modport, is_interface) for a port connection.
 
     For interface ports slang exposes the connected interface instance and its
     modport via ``ifaceConn`` as ``(InstanceSymbol, ModportSymbol)``; the instance
     name is the wire we want (a stream / bus), and the modport gives its
-    direction. For ordinary ports we use the connected expression text.
+    direction. For ordinary ports we read the connected expression.
     """
     port = getattr(pc, "port", None)
-    if port is not None and _kind(port) == "InterfacePortSymbol":
-        ic = getattr(pc, "ifaceConn", None)
-        if isinstance(ic, (tuple, list)) and ic and ic[0] is not None:
-            modport = getattr(ic[1], "name", "") if len(ic) > 1 and ic[1] is not None else ""
-            return getattr(ic[0], "name", "") or "", modport, True
-        return "", "", True
     expr = getattr(pc, "expression", None)
-    syn = getattr(expr, "syntax", None) if expr is not None else None
+    if port is not None and _kind(port) == "InterfacePortSymbol":
+        modport = ""
+        fallback = ""
+        ic = getattr(pc, "ifaceConn", None)
+        if isinstance(ic, (tuple, list)) and ic:
+            if len(ic) > 1 and ic[1] is not None:
+                modport = getattr(ic[1], "name", "") or ""
+            if ic[0] is not None:
+                fallback = getattr(ic[0], "name", "") or ""
+        # Prefer the source text: it is the real wire/port name. The ifaceConn
+        # instance is named after the interface type when the connection is the
+        # parent's own boundary port, which would merge unrelated streams.
+        return _net_text(expr, sm) or fallback, modport, True
+    return _net_text(expr, sm), "", False
+
+
+def _net_text(expr, sm) -> str:
+    """The connected net of a port expression, as written in the source.
+
+    Output ports wrap the connection in an assignment whose left side is the
+    external net, so we follow it. For everything else we read the expression's
+    own source range, which also recovers bit-selects and array elements that
+    have no syntax node after elaboration.
+    """
+    if expr is None:
+        return ""
+    if _kind(expr) == "AssignmentExpression":
+        for side in (getattr(expr, "left", None), getattr(expr, "right", None)):
+            if side is not None and _kind(side) != "EmptyArgumentExpression":
+                text = _net_text(side, sm)
+                if text:
+                    return text
+        return ""
+    syn = getattr(expr, "syntax", None)
     if syn is not None:
-        return str(syn).strip(), "", False
-    return "", "", False
+        return str(syn).strip()
+    sr = getattr(expr, "sourceRange", None)
+    if sr is not None and sm is not None:
+        try:
+            return sm.getSourceText(sr.start.buffer)[sr.start.offset:sr.end.offset].strip()
+        except Exception:
+            pass
+    return ""
 
 
-def _instance_from_symbol(inst) -> Instance:
+def _instance_from_symbol(inst, sm) -> Instance:
     body = inst.body
     defn = getattr(body, "definition", None)
     module = defn.name if defn is not None else getattr(body, "name", "?")
@@ -191,7 +224,7 @@ def _instance_from_symbol(inst) -> Instance:
         for pc in (inst.portConnections or []):
             port = getattr(pc, "port", None)
             pname = getattr(port, "name", "") if port is not None else ""
-            net, modport, is_if = _conn_info(pc)
+            net, modport, is_if = _conn_info(pc, sm)
             conns.append(PortConn(port=pname, net=net, is_interface=is_if, modport=modport))
     except Exception:
         pass
@@ -259,7 +292,7 @@ def _module_from_body(body, sm) -> Module:
     except Exception:
         pass
     # child instances
-    raw = [_instance_from_symbol(i) for i in _direct_instances(body)]
+    raw = [_instance_from_symbol(i, sm) for i in _direct_instances(body)]
     mod.instances = _collapse_instances(raw)
     return mod
 

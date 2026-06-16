@@ -112,7 +112,7 @@ def _net_base(expr: str) -> str:
 
 
 _DRIVER_MODPORTS = {"source", "initiator", "master", "mst", "out", "producer", "manager"}
-_LOAD_MODPORTS = {"sink", "subordinate", "slave", "slv", "in", "consumer"}
+_LOAD_MODPORTS = {"sink", "subordinate", "slave", "slv", "in", "consumer", "target"}
 
 
 def _role(child, port: str) -> str:
@@ -164,14 +164,16 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
             if base:
                 add(base, nid, _conn_role(c, child))
 
-    # boundary ports join nets that share their name
+    # boundary ports join nets that share their name; interface ports use their
+    # modport to decide whether they are an input (left) or output (right) pin.
     boundary: dict[str, tuple[str, str]] = {}
     for p in mod.ports:
         if p.name in nets and not (_is_clock(p.name) or _is_reset(p.name)):
-            role = "driver" if p.direction == "in" else ("load" if p.direction == "out" else "both")
-            pid = f"p__{p.name}"
-            boundary[p.name] = (pid, "in" if p.direction == "in" else "out")
-            nets[p.name].append((pid, role))
+            d = p.eff_dir
+            role = "driver" if d == "in" else ("load" if d == "out" else "both")
+            side = "in" if d == "in" else "out"
+            boundary[p.name] = (f"p__{p.name}", side)
+            nets[p.name].append((f"p__{p.name}", role))
 
     # keep only multi-endpoint nets (actual connections)
     nets = {n: eps for n, eps in nets.items() if len({e[0] for e in eps}) >= 2}
@@ -179,15 +181,18 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
     kept_nets = sorted(nets)[:max_nodes]
 
     lines = [_header("LR")]
-    # Boundary ports sit outside the module block, like external pins.
-    for pname, (pid, side) in boundary.items():
-        rank = "min" if side == "in" else "max"
-        ori = "" if side == "in" else "orientation=180, "
-        lines.append(
-            f'  {{ rank={rank}; "{pid}" [shape=cds, {ori}'
-            f'label="{html.escape(pname)}", fillcolor="{C_PORT}", fontcolor="white", '
-            "fontsize=10]; }"
-        )
+    # Boundary ports sit outside the module block, like external pins. A boundary
+    # port doubles as the hub for its net, so no separate signal node is drawn.
+    for net in kept_nets:
+        if net in boundary:
+            _, side = boundary[net]
+            rank = "min" if side == "in" else "max"
+            ori = "" if side == "in" else "orientation=180, "
+            lines.append(
+                f'  {{ rank={rank}; "p__{net}" [shape=cds, {ori}'
+                f'label="{html.escape(net)}", fillcolor="{C_PORT}", fontcolor="white", '
+                "fontsize=10]; }"
+            )
     # The module itself is the enclosing block; submodules and signals nest inside.
     lines.append(f'  subgraph "cluster_{name}" {{')
     lines.append(
@@ -208,22 +213,24 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
             f'fillcolor="{fill}", fontcolor="{txt}"];'
         )
     for net in kept_nets:
-        lines.append(
-            f'    "n__{net}" [label="{html.escape(net)}", '
-            f'fillcolor="{C_NET}", fontcolor="{C_NET_TXT}", fontname="{FONT_MONO}", '
-            'fontsize=9, margin="0.08,0.03"];'
-        )
+        if net not in boundary:
+            lines.append(
+                f'    "n__{net}" [label="{html.escape(net)}", '
+                f'fillcolor="{C_NET}", fontcolor="{C_NET_TXT}", fontname="{FONT_MONO}", '
+                'fontsize=9, margin="0.08,0.03"];'
+            )
     lines.append("  }")
-    # Wiring: drivers point into a signal, signals point out to their loads.
+    # Wiring: drivers point into the signal (or boundary pin), signals point out
+    # to their loads.
     for net in kept_nets:
-        net_id = f"n__{net}"
-        for node, role in {(n, r) for n, r in nets[net]}:
+        hub = f"p__{net}" if net in boundary else f"n__{net}"
+        for node, role in {(n, r) for n, r in nets[net] if not n.startswith("p__")}:
             if role == "driver":
-                lines.append(_edge(node, net_id))
+                lines.append(_edge(node, hub))
             elif role == "load":
-                lines.append(_edge(net_id, node))
+                lines.append(_edge(hub, node))
             else:
-                lines.append(_edge(net_id, node, directed=False))
+                lines.append(_edge(hub, node, directed=False))
     lines.append("}")
     return "\n".join(lines)
 

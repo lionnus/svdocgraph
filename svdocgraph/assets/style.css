@@ -158,6 +158,7 @@ th.num, td.num { text-align:right; font-variant-numeric:tabular-nums; }
 .dir-out { background:color-mix(in srgb,var(--out) 14%,transparent); color:var(--out); }
 .dir-inout { background:color-mix(in srgb,var(--io) 18%,transparent); color:var(--io); }
 .dir-interface { background:color-mix(in srgb,var(--ifc) 15%,transparent); color:var(--ifc); }
+.dir-if { box-shadow:inset 0 -2px 0 var(--ifc); }  /* marks an interface port */
 
 /* ---- module cards grid ---- */
 .cardgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:2px; background:var(--bg-3); }

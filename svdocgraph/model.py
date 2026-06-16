@@ -23,6 +23,20 @@ def _is_reset(name: str) -> bool:
     return "rst" in n or "reset" in n
 
 
+_OUT_MODPORTS = {"source", "initiator", "master", "mst", "out", "producer", "manager"}
+_IN_MODPORTS = {"sink", "subordinate", "slave", "slv", "in", "consumer", "target"}
+
+
+def interface_dir(modport: str) -> str:
+    """Effective port direction (in/out/inout) for an interface modport."""
+    m = (modport or "").lower()
+    if m in _OUT_MODPORTS:
+        return "out"
+    if m in _IN_MODPORTS:
+        return "in"
+    return "inout"
+
+
 def reset_polarity(name: str) -> str:
     """Best-effort active-low/high guess from a reset port name."""
     n = name.lower()
@@ -57,6 +71,11 @@ class Port:
     interface: str = ""        # interface name, for interface ports
     modport: str = ""          # modport name, for interface ports
     desc: str = ""             # doc comment, if any
+
+    @property
+    def eff_dir(self) -> str:
+        """Direction used for grouping: interfaces map via their modport."""
+        return interface_dir(self.modport) if self.is_interface else self.direction
 
 
 @dataclass
@@ -105,11 +124,11 @@ class Module:
 
     @property
     def n_inputs(self) -> int:
-        return sum(1 for p in self.ports if p.direction == "in")
+        return sum(1 for p in self.ports if p.eff_dir == "in")
 
     @property
     def n_outputs(self) -> int:
-        return sum(1 for p in self.ports if p.direction == "out")
+        return sum(1 for p in self.ports if p.eff_dir == "out")
 
     @property
     def clocks(self) -> list[Port]:
