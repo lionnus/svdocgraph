@@ -1,0 +1,49 @@
+[project]
+name = "svdocgraph"
+version = "0.1.0"
+description = "Bender-aware SystemVerilog design map & documentation generator"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Lionnus Kesting" }]
+keywords = ["systemverilog", "bender", "documentation", "hardware", "rtl", "slang"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development :: Documentation",
+  "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+]
+dependencies = [
+  "pyslang>=7.0",   # SystemVerilog parsing + elaboration (MIT)
+  "Jinja2>=3.0",    # HTML templating
+  "PyYAML>=5.4",    # Bender.yml / Bender.lock parsing
+]
+
+[project.optional-dependencies]
+dev = ["ruff", "pytest"]
+
+[project.urls]
+Homepage = "https://github.com/lkesting/svdocgraph"
+Issues = "https://github.com/lkesting/svdocgraph/issues"
+
+[project.scripts]
+svdocgraph = "svdocgraph.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["svdocgraph"]
+# Templates, CSS/JS and fonts live inside the package and must ship in the wheel.
+artifacts = [
+  "svdocgraph/templates/**",
+  "svdocgraph/assets/**",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Hierarchy{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <div class="eyebrow">Design map</div>
+  <h1>Module hierarchy</h1>
+  <p class="lede">Who instantiates whom. Solid accent = owned modules, dashed = external black boxes, purple border = tops.</p>
+</div></div>
+<section class="card">
+  {% if hierarchy_svg %}
+  <figure class="graph graph-tall" data-zoom>{{ hierarchy_svg|safe }}
+    <figcaption class="graph-tools">
+      <button data-zoom-in>+</button><button data-zoom-out>-</button><button data-zoom-reset>reset</button>
+      <span class="graph-hint">scroll to zoom · drag to pan · click a node to open</span>
+    </figcaption>
+  </figure>
+  {% else %}
+  <p class="empty">Graphviz <code>dot</code> not found - install Graphviz to render graphs.</p>
+  {% endif %}
+</section>
+{% endblock %}

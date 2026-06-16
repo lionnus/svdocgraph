@@ -1,0 +1,16 @@
+# Build / dist
+build/
+dist/
+*.egg-info/
+__pycache__/
+*.py[cod]
+
+# Generated documentation sites
+svdocgraph_site/
+public/
+*.svdocgraph.json
+
+# Tooling
+.venv/
+.ruff_cache/
+.pytest_cache/
