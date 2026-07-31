@@ -38,6 +38,37 @@ jobs:
       - run: uv sync --extra dev --python ${{ matrix.python }}
       - run: uv run --extra dev --python ${{ matrix.python }} pytest -v
 
+  coverage:
+    # `fail_under` lives in pyproject.toml and is the number on the README badge.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install Graphviz
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends graphviz
+      - run: uv sync --extra dev
+      - name: Measure coverage
+        run: uv run --extra dev pytest --cov --cov-report=term-missing --cov-report=xml
+      - name: Publish the number
+        if: always()
+        run: |
+          uv run --extra dev python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import xml.etree.ElementTree as ET
+          root = ET.parse("coverage.xml").getroot()
+          line = float(root.get("line-rate", 0)) * 100
+          branch = float(root.get("branch-rate", 0)) * 100
+          print("### Coverage\n")
+          print(f"- lines: {line:.1f}%")
+          print(f"- branches: {branch:.1f}%")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-xml
+          path: coverage.xml
+
   package:
     # The tool is installed with `uv tool install` / `pipx`, so the wheel - not the
     # source tree - is what users actually run. Build it and drive it.

@@ -114,3 +114,27 @@ def test_ownership_of_output_directory(tmp_path):
 def test_read_build_info_tolerates_garbage(tmp_path):
     tmp_path.joinpath(project.BUILD_INFO).write_text("not json")
     assert project.read_build_info(str(tmp_path)) is None
+
+
+def test_config_that_is_not_a_mapping_is_ignored(project_dir):
+    (project_dir / "svdocgraph.yml").write_text("- just\n- a list\n")
+    assert project.load_config(str(project_dir)).output == project.DEFAULT_OUTPUT
+
+
+def test_gitignore_is_skipped_for_output_outside_the_repository(project_dir, tmp_path):
+    outside = tmp_path / "elsewhere" / "site"
+    outside.mkdir(parents=True)
+    assert project.ensure_gitignored(str(outside)) is None
+
+
+def test_gitignore_handles_a_missing_git_binary(project_dir, monkeypatch):
+    monkeypatch.setenv("PATH", "")
+    outdir = project_dir / project.DEFAULT_OUTPUT
+    outdir.mkdir()
+    assert project.ensure_gitignored(str(outdir)) is None, "no git means nothing to do"
+
+
+def test_index_url_points_at_the_entry_page(tmp_path):
+    url = project.index_url(str(tmp_path))
+    assert url.startswith("file://")
+    assert url.endswith("index.html")

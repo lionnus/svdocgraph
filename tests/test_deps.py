@@ -66,3 +66,26 @@ def test_doctor_fails_and_explains(run_cli, monkeypatch, capsys):
     assert run_cli("doctor") == 3
     out = capsys.readouterr().out
     assert "bender" in out and "cargo install bender" in out
+
+
+def test_broken_graphviz_is_reported(tmp_path, monkeypatch):
+    bad = tmp_path / "bin"
+    bad.mkdir()
+    exe = bad / "dot"
+    exe.write_text("#!/bin/sh\nexit 1\n")
+    exe.chmod(0o755)
+    monkeypatch.setenv("PATH", str(bad))
+    dep = deps.check_dot()
+    assert not dep.ok
+    assert "failed" in dep.detail
+
+
+def test_status_words_match_the_requirement(monkeypatch):
+    monkeypatch.setenv("PATH", "")
+    assert deps.check_bender().status == "missing"
+    assert deps.check_dot().status == "not found"
+
+
+def test_check_all_covers_every_requirement():
+    names = {d.name for d in deps.check_all()}
+    assert {"bender", "pyslang", "python"} <= names

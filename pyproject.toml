@@ -23,11 +23,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff", "pytest"]
+dev = ["ruff", "pytest", "pytest-cov"]
 
 [project.urls]
-Homepage = "https://github.com/lkesting/svdocgraph"
-Issues = "https://github.com/lkesting/svdocgraph/issues"
+Homepage = "https://github.com/lionnus/svdocgraph"
+Issues = "https://github.com/lionnus/svdocgraph/issues"
 
 [project.scripts]
 svdocgraph = "svdocgraph.cli:main"
@@ -46,7 +46,26 @@ artifacts = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "-q --strict-markers --strict-config"
+# Tests import helpers from conftest.py by name.
+pythonpath = ["tests"]
+
+[tool.coverage.run]
+source = ["svdocgraph"]
+branch = true
+
+[tool.coverage.report]
+precision = 1
+show_missing = true
+# The floor CI enforces, and the number on the README badge. Raise it when the
+# suite grows; never lower it to make a red build green.
+fail_under = 90
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "if __name__ == .__main__.:",
+  "except ImportError:",
+]
 
 [tool.ruff]
 line-length = 100

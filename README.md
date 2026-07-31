@@ -1,214 +1,210 @@
 # SVDocGraph
 
-A Bender-aware SystemVerilog design map and documentation generator.
+[![ci](https://github.com/lionnus/svdocgraph/actions/workflows/ci.yml/badge.svg)](https://github.com/lionnus/svdocgraph/actions/workflows/ci.yml)
+[![integration](https://github.com/lionnus/svdocgraph/actions/workflows/integration.yml/badge.svg)](https://github.com/lionnus/svdocgraph/actions/workflows/integration.yml)
+[![coverage](https://img.shields.io/badge/coverage-%E2%89%A590%25-brightgreen)](#development)
+[![python](https://img.shields.io/badge/python-3.9%20%E2%80%93%203.13-blue)](pyproject.toml)
+[![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-SVDocGraph reads a [Bender](https://github.com/pulp-platform/bender) project and
-generates a static website: a clickable hierarchy, per-module port and parameter
-tables with resolved widths, and an internal block diagram for every module that
-shows the submodules inside it and the signals connecting them.
+SVDocGraph makes documentation for SystemVerilog designs that use
+[Bender](https://github.com/pulp-platform/bender).
 
-It uses [slang](https://github.com/MikePopoloski/slang) (through `pyslang`) to
-elaborate the RTL, so macros are expanded, parameters are resolved, port widths are
-computed, and the instance hierarchy is taken from the elaborated design rather than
-inferred from text.
+The tool reads a Bender project and writes a static web site. The site shows the
+design hierarchy, the ports and the parameters of each module, and a block diagram
+of the contents of each module.
+
+The tool uses [slang](https://github.com/MikePopoloski/slang), through `pyslang`,
+to elaborate the design. Thus the tool expands the macros, resolves the parameter
+values, calculates the port widths, and reads the instance tree from the elaborated
+design. The tool does not guess this data from the source text.
 
 ## Features
 
-- **Internal connectivity diagrams.** Per module, the submodules instantiated inside
-  it and the named signals (including SV interface streams and buses) that wire them
-  together, laid out automatically inside the module boundary.
-- **Module pages.** Ports grouped by direction with resolved types and bit widths,
-  interface ports with modports, resolved parameter values, the submodule list,
-  declared interface instances, clocks and resets, and where the module is used.
-- **Design hierarchy graph.** The instantiation tree; click a node to open it.
-- **Package dependency graph.** From `Bender.yml` and `Bender.lock`, with versions,
-  locked revisions and sources for provenance.
-- **Search.** A command palette (`/` or Ctrl/Cmd-K) over modules, ports and packages.
-- **Self-contained output.** Static HTML, CSS, JS and inline SVG. No server and no
-  network needed to view it; host the folder on GitLab or GitHub Pages as-is.
+- **Block diagram for each module.** The diagram shows the child instances and the
+  signals between them. Interfaces and buses are included.
+- **Module pages.** Each page shows the ports in groups by direction. Each port has
+  its resolved type and width. Each page also shows the parameter values, the child
+  instances, the clocks, the resets, and the parent modules.
+- **Hierarchy graph.** The graph shows the instance tree. Click on a module to open
+  its page.
+- **Package graph.** The graph shows the Bender dependencies with their versions,
+  their locked revisions and their sources.
+- **Search.** Push `/` or Ctrl-K to search for a module, a port or a package.
+- **Offline output.** The site contains only HTML, CSS, JavaScript and SVG. A server
+  is not necessary. Copy the directory to any static web host.
 
-## Quick start
+## Requirements
 
-SVDocGraph is a standalone tool, the same way `bender`, `morty` or `svase` are: you
-install it once and run it inside any Bender project. Nothing is vendored into the
-project and there is nothing to configure.
+| Item | Function | Necessary | Installation |
+| --- | --- | --- | --- |
+| [`bender`](https://github.com/pulp-platform/bender) | Gives the source files, the include directories, the macro definitions and the package of each file | Yes | `curl https://pulp-platform.github.io/bender/init -sSf \| sh` |
+| [Graphviz](https://graphviz.org/) (`dot`) | Calculates the layout of each graph | Recommended | `apt install graphviz` or `brew install graphviz` |
+| `pyslang` 11 | Elaborates the design | Yes | Installed with the tool |
+| `Jinja2`, `PyYAML` | Makes the HTML pages and reads the Bender files | Yes | Installed with the tool |
+
+A simulator or a licence is not necessary. The slang compiler is included in the
+`pyslang` package.
+
+The `pyslang` version limit is a requirement. In version 11 the `Driver` class moved
+to `pyslang.driver`. With an older version the tool finds no modules.
+
+To show the status of each item, run this command:
+
+```sh
+svdocgraph doctor
+```
+
+If `bender` is not available, the tool stops with exit code 3. If Graphviz is not
+available, the tool gives a warning and writes the pages without the graphs.
+
+## Installation
+
+Install the tool one time. Then use it in each Bender project. The tool does not add
+files to the project.
 
 ```sh
 uv tool install svdocgraph      # or: pipx install svdocgraph
+```
+
+To use the tool without installation, run `uvx svdocgraph gen`.
+
+## Usage
+
+Run the tool in a Bender project. The tool finds the project root. The project root
+is the nearest parent directory that contains a `Bender.yml` file.
+
+```sh
 cd my-bender-project
 svdocgraph gen --open
 ```
 
-That elaborates the design, writes the docs to `.svdocgraph/` in the project root,
-and opens them in your browser. Later, `svdocgraph open` reopens them without
-rebuilding.
+The tool elaborates the design, writes the documentation to `.svdocgraph/`, and opens
+the documentation in the web browser.
 
-To try it without installing anything: `uvx svdocgraph gen --open`.
+| Command | Function |
+| --- | --- |
+| `svdocgraph gen` | Makes the documentation in `.svdocgraph/` |
+| `svdocgraph gen --open` | Makes the documentation and opens it |
+| `svdocgraph open` | Opens the last documentation. Makes it first if it is not available |
+| `svdocgraph serve` | Makes the documentation and serves it on `http://localhost:8080` |
+| `svdocgraph gen -o public` | Writes the documentation to a different directory |
+| `svdocgraph init` | Writes `svdocgraph.yml` and a `.gitignore` rule |
+| `svdocgraph doctor` | Shows the status of the necessary programs |
+| `svdocgraph dump -o design.json` | Writes only the design data as JSON |
 
-## Dependencies
+The name `build` is an alternative for `gen`.
 
-Two things must be on your `PATH`; everything else is a Python dependency that
-`pip`/`uv` installs for you.
+Configuration is not necessary. The tool asks `bender` for the source files, the
+include directories, the macro definitions and the package of each file. The tool
+then elaborates each module of the root package. Use `--top NAME` to add a module
+that only a testbench instantiates.
 
-| What | Why | Required | Install |
-| --- | --- | --- | --- |
-| [`bender`](https://github.com/pulp-platform/bender) | source set, include dirs, defines, package map | yes | `curl https://pulp-platform.github.io/bender/init -sSf \| sh` or `cargo install bender` |
-| [Graphviz](https://graphviz.org/) (`dot`) | lays out every diagram | strongly recommended | `apt install graphviz` / `brew install graphviz` |
-| `pyslang` >= 11 | the slang elaborator, as a wheel | yes | installed automatically |
-| `Jinja2`, `PyYAML` | templating, `Bender.yml` parsing | yes | installed automatically |
+### Output
 
-No SystemVerilog simulator or license is needed: slang ships as a binary wheel
-inside `pyslang`, so there is nothing to compile.
+The tool writes the documentation to `.svdocgraph/` in the project root. This
+directory has one owner: the tool. Thus the project needs only one `.gitignore` rule,
+and the output cannot mix with a manual `docs/` directory. The first `gen` command
+adds the rule to the `.gitignore` file of the repository.
 
-```sh
-svdocgraph doctor    # prints what is found, what is missing, and how to install it
-```
+To read the documentation, open `.svdocgraph/index.html` in a web browser. The
+search function, the graphs and the theme operate offline.
 
-`gen` refuses to run without `bender` (exit code 3) rather than producing an empty
-site, and warns when Graphviz is missing (the site still builds, minus the
-diagrams).
+The `gen` command does not write into a directory that contains other files. To
+replace such a directory, use the `--force` option.
 
-The `pyslang` floor is a hard requirement, not a preference: `Driver` moved to
-`pyslang.driver` in 11.0, and on older releases the extractor finds nothing and
-would silently produce an empty design. Python 3.9 through 3.13 are tested in CI.
+### Configuration
 
-## Commands
-
-Run from anywhere inside a Bender project; the project root is the nearest
-directory above you containing a `Bender.yml`.
-
-```sh
-svdocgraph gen              # generate the docs into ./.svdocgraph
-svdocgraph gen --open       # ...and open them
-svdocgraph open             # open the last build (generates it if missing)
-svdocgraph serve            # generate, then serve at http://localhost:8080
-svdocgraph gen -o public    # write somewhere else, e.g. for CI / Pages
-svdocgraph init             # optional: write svdocgraph.yml + .gitignore rule
-svdocgraph dump -o design.json   # just the extracted model as JSON
-```
-
-`build` is kept as an alias for `gen`.
-
-Zero configuration: SVDocGraph asks `bender` for the source set, include
-directories, macro defines, and the package each file belongs to, then elaborates
-every module declared by the root package. Use `--top NAME` to force extra top
-modules if some are only reachable from a testbench target.
-
-### Where the output goes
-
-The docs land in a single tool-owned directory, `.svdocgraph/`, next to `Bender.yml`
-— one entry to ignore, no chance of colliding with a hand-written `docs/`. The first
-`gen` adds it to the repository's `.gitignore` for you. The site is plain static
-files: open `.svdocgraph/index.html` straight from disk (search, graphs and theme
-all work offline, no server needed), or point any static host at the directory.
-
-`gen` refuses to write into a non-empty directory it did not generate itself, so
-`-o docs` cannot silently eat your handwritten documentation; pass `--force` if you
-really mean it.
-
-### Optional config
-
-`svdocgraph init` writes an `svdocgraph.yml` so that a plain `svdocgraph gen` — and
-therefore `make docs` — needs no flags:
+The `svdocgraph init` command writes an `svdocgraph.yml` file. Then the `svdocgraph
+gen` command, and a `make` rule that calls it, do not need options. Each key is
+optional.
 
 ```yaml
-output: .svdocgraph      # where the docs go
-tops: [my_testbench_top] # extra tops to elaborate
-name: My Design          # title in the site header
+output: .svdocgraph        # Directory for the documentation
+tops: [my_testbench_top]   # Additional top modules to elaborate
+name: My Design            # Title in the page header
 ```
 
-## How it fits into a project
+### Integration in a project
 
-Think of it the way software projects use MkDocs, Sphinx or `cargo doc`.
+To make the documentation from `make`, add this rule:
 
-1. **As a standalone tool (recommended).** Installed once on your machine or in CI,
-   run in any Bender repository.
+```makefile
+.PHONY: docs
+docs:
+	svdocgraph gen -q
+```
 
-2. **As a documentation target in your build.** Add a target to the project that
-   already drives `bender`:
+To publish the documentation from GitLab CI, add this job:
 
-   ```makefile
-   .PHONY: docs docs-open
-   docs:
-   	svdocgraph gen
+```yaml
+pages:
+  image: python:3.12
+  script:
+    - pip install svdocgraph
+    - apt-get update && apt-get install -y graphviz bender
+    - svdocgraph gen -o public
+  artifacts:
+    paths: [public]
+```
 
-   docs-open:
-   	svdocgraph gen --open
-   ```
-
-   `make docs` is quiet enough for CI with `svdocgraph gen -q`.
-
-3. **As a CI job that publishes to Pages.** For example, GitLab CI:
-
-   ```yaml
-   pages:
-     image: python:3.12
-     script:
-       - pip install svdocgraph
-       - apt-get update && apt-get install -y graphviz bender
-       - svdocgraph gen -o public
-     artifacts:
-       paths: [public]
-   ```
-
-The generated site is just files, so it drops into any static host.
-
-## How it works
+## Operation
 
 ```
 Bender.yml / Bender.lock
-        |  bender script flist-plus   (sources + incdirs + defines)
-        |  bender sources -f          (file  ->  owning package)
+        |  bender script flist-plus   (sources, include dirs, defines)
+        |  bender sources -f          (file -> package)
         v
-   slang / pyslang   elaborate every module of the root package
+   slang / pyslang    elaborates each module of the root package
         v
-   design model      modules, ports, params, instances, connections, provenance
+   design model       modules, ports, parameters, instances, connections
         v
-   Graphviz + Jinja  internal netlists, hierarchy, package graph -> static site
+   Graphviz + Jinja   block diagrams, hierarchy, package graph -> static site
 ```
 
 ## Development
 
 ```sh
 uv sync --extra dev
-uv run pytest          # unit + end-to-end tests, no bender installation needed
+uv run pytest                  # 129 tests
+uv run pytest --cov            # tests with the coverage report
 uv run ruff check .
 ```
 
-The tests drive the CLI against a small fixture design in `tests/fixtures/demo`
-using a stub `bender`, so they run anywhere.
+The tests use a small design in `tests/fixtures/demo` and a substitute for `bender`.
+Thus an installation of `bender` is not necessary, and the tests operate on each
+platform.
 
-Two workflows run in CI:
+Coverage is 92% of the statements and the branches. The minimum value is in
+`pyproject.toml`. CI stops with an error if the coverage becomes less than this
+minimum. Do not decrease the minimum to make a failed job pass.
 
-- **`ci`** — lint, the test suite on Python 3.9-3.13, and a packaging job that
-  builds the wheel, installs it into a clean environment and drives the installed
-  entry point (the templates, CSS, JS and fonts must ship inside it).
-- **`integration`** — generates documentation for two real
-  [PULP Platform](https://github.com/pulp-platform) designs with a real `bender`:
+Two workflows operate in CI:
 
-  | design | why | extracted |
+- **`ci`** — runs `ruff`, then the tests on Python 3.9 to 3.13, then the coverage
+  measurement. The last job builds the wheel, installs it in an empty environment,
+  and runs the installed command. The templates, the style sheet, the JavaScript and
+  the fonts must be in the wheel.
+- **`integration`** — makes documentation for two
+  [PULP Platform](https://github.com/pulp-platform) designs with the true `bender`.
+
+  | Design | Type | Result |
   | --- | --- | --- |
-  | [`cv32e40p`](https://github.com/pulp-platform/cv32e40p) @ `vega_v1.3.4` | a processor core: deep hierarchy from core through the pipeline stages to ALU, LSU and register file | 26 units, 0 diagnostics |
-  | [`datamover`](https://github.com/pulp-platform/datamover) @ `f14d4db` | an HWPE accelerator: hwpe-stream, HCI and hwpe-ctrl interfaces wiring an engine to a streamer | 20 units, 3 interfaces, 0 diagnostics |
+  | [`opope`](https://github.com/pulp-platform/opope) | Outer-product engine with 14 dependencies | 41 units, 2 interfaces, 0 diagnostics |
+  | [`datamover`](https://github.com/pulp-platform/datamover) | HWPE accelerator with stream and HCI interfaces | 20 units, 3 interfaces, 0 diagnostics |
 
-  Each run asserts a floor on what was extracted — module and interface counts,
-  named units such as `riscv_core` and `hci_core_intf`, zero diagnostics, graphs
-  actually rendered — and uploads the generated site as a build artifact you can
-  download and browse. It runs on every push and pull request, plus weekly.
+  Each job makes sure that the tool found the expected modules, the expected
+  interfaces and no diagnostics. `scripts/check_site.py` contains these tests. Each
+  job also keeps the documentation as an artifact. You can download the artifact and
+  read it.
 
-The designs are pinned to a tag or commit, so upstream RTL changes cannot turn a
-pull request red; the weekly run is what catches breakage from the things that do
-float (a new bender, pyslang, Graphviz or runner image). Bumping a pin is a
-deliberate commit. `scripts/check_site.py` holds the assertions and can be pointed
-at any generated site by hand.
-
-`cv32e40p` is pinned to `vega_v1.3.4` because that is the newest tag whose
-`Bender.yml` still resolves. On `master` — and on the openhwgroup fork, up to and
-including `cv32e40p_v1.8.3` — `bender` fails with a `tech_cells_generic`
-requirement conflict, and two files listed under `sources` no longer exist in the
-tree. Both designs are used exactly as published; nothing is patched.
+Each design has a fixed tag or commit. Thus a change in a design cannot cause a
+failure in a pull request. The weekly job finds a failure that a new version of
+`bender`, `pyslang`, Graphviz or the runner image causes. To change a version, make
+a commit.
 
 ## License
 
-Apache-2.0. Bundled IBM Plex fonts are licensed under the SIL Open Font License 1.1
-(see `svdocgraph/assets/fonts/OFL.txt`).
+Apache-2.0. See [LICENSE](LICENSE).
+
+The IBM Plex fonts in `svdocgraph/assets/fonts` have the SIL Open Font License 1.1.
+See `svdocgraph/assets/fonts/OFL.txt`.

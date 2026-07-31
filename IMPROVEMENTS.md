@@ -10,11 +10,13 @@ dependencies). The following works today:
 - slang elaborates every module declared by the root package, including modules
   with macro-defined parameters and SV interface ports that do not elaborate as
   plain tops. 70 modules were extracted (37 owned by the root package), 0 errors.
-- Also verified against upstream PULP repositories: `cv32e40p` vega_v1.3.4 (26
-  units, the full RI5CY pipeline) and `datamover` (20 units, 3 HWPE/HCI
-  interfaces) run in CI, and `common_cells` v1.40.0 (117 units) and `axi`
-  v0.39.10 (144 units, 7 interfaces) were verified by hand - all with zero
-  diagnostics.
+- Also verified against upstream PULP repositories: `opope` (41 units, 14
+  dependency packages) and `datamover` (20 units, 3 HWPE/HCI interfaces) run in
+  CI; `cv32e40p` vega_v1.3.4 (26 units), `common_cells` v1.40.0 (117 units) and
+  `axi` v0.39.10 (144 units, 7 interfaces) were verified by hand - all with zero
+  diagnostics. Recent `cv32e40p` tags are not usable: their `Bender.yml` has an
+  unresolvable `tech_cells_generic` requirement and lists two files that no
+  longer exist.
 - `bender` failures (an unresolvable dependency, a stale `sources` list) are
   reported with bender's own message and exit code 4, instead of being reduced to
   "no modules extracted". cv32e40p's `master` is an example of both.
@@ -67,12 +69,14 @@ directory to Pages.
 
 - `tests/` drives the CLI end to end against a fixture design with a stub bender,
   so the suite needs no bender installation and runs anywhere.
-- The `integration` workflow runs the real thing against `pulp-platform/cv32e40p`
-  (a processor core) and `pulp-platform/datamover` (an HWPE accelerator), pinned
-  to a tag and a commit, and asserts a floor on what is extracted (module and
-  interface counts, named units, zero diagnostics, graphs rendered). Building
-  it caught the interface-classification bug below and the swallowed bender
-  errors.
+- The `integration` workflow runs the real thing against `pulp-platform/opope`
+  (an outer-product engine with 14 dependencies) and `pulp-platform/datamover`
+  (an HWPE accelerator), pinned to commits, and asserts a floor on what is
+  extracted (module and interface counts, named units, zero diagnostics, graphs
+  rendered). Building it caught the interface-classification bug below and the
+  swallowed bender errors.
+- Coverage is measured with pytest-cov (statements and branches). The floor lives
+  in `pyproject.toml` and CI enforces it.
 
 ## Known limitations
 

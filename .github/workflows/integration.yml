@@ -36,25 +36,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # A processor core: deep instance hierarchy (core -> pipeline stages ->
-          # ALU/LSU/register file), package imports, `define-driven parameters.
-          #
-          # Pinned to vega_v1.3.4 because it is the newest tag whose Bender.yml
-          # actually resolves: on master (and on the openhwgroup fork, including
-          # cv32e40p_v1.8.3) bender fails with a tech_cells_generic requirement
-          # conflict, and two files listed under `sources` no longer exist in the
-          # tree. Nothing here is patched - the repository is used as published.
-          - name: cv32e40p
-            repo: pulp-platform/cv32e40p
-            ref: vega_v1.3.4
+          # An outer-product engine with 14 bender dependencies: a deep package
+          # graph, floating-point units from cvfpu, and HCI/hwpe-stream interfaces.
+          - name: opope
+            repo: pulp-platform/opope
+            ref: 76e544bab5f821a199f5f82b80b8ad483bfaaa8f
             checks: >-
-              --min-modules 24
-              --want-module riscv_core
-              --want-module riscv_id_stage
-              --want-module riscv_ex_stage
-              --want-module riscv_if_stage
-              --want-module riscv_load_store_unit
-              --want-module riscv_cs_registers
+              --min-modules 35
+              --min-interfaces 2
+              --want-interface hci_core_intf
+              --want-interface hwpe_stream_intf_stream
+              --want-module opope_top
+              --want-module opope_engine
+              --want-module opope_streamer
+              --want-module opope_tiler
           # An HWPE accelerator: the streaming/interface style this tool exists
           # for - hwpe-stream, HCI and hwpe-ctrl interfaces wiring an engine to a
           # streamer, with most units coming from dependencies rather than the

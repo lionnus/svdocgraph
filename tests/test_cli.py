@@ -9,7 +9,7 @@ import re
 import pytest
 from conftest import needs_dot, needs_pyslang
 
-from svdocgraph import project
+from svdocgraph import deps, project
 
 pytestmark = [needs_pyslang]
 
@@ -187,4 +187,122 @@ def test_failing_bender_is_reported_in_its_own_words(run_cli, project_dir, tmp_p
 
 def test_build_is_an_alias_for_gen(run_cli, project_dir, stub_bender):
     assert run_cli("build", cwd=project_dir) == 0
+    assert (project_dir / project.DEFAULT_OUTPUT / "index.html").is_file()
+
+
+def test_extra_tops_are_passed_to_the_extractor(run_cli, project_dir, stub_bender):
+    (project_dir / "svdocgraph.yml").write_text("tops: [demo_bus_if]\n")
+    seen = {}
+
+    def spy(ctx):
+        seen["tops"] = ctx.tops
+        raise SystemExit(0)
+
+    import svdocgraph.cli as cli
+    real = cli._build_design
+    cli._build_design = spy
+    try:
+        with pytest.raises(SystemExit):
+            run_cli("gen", "--top", "demo_top", cwd=project_dir)
+    finally:
+        cli._build_design = real
+    assert seen["tops"] == ["demo_bus_if", "demo_top"], "config tops come first, then -top"
+
+
+def test_a_directory_without_bender_yml_warns(run_cli, tmp_path, stub_bender, capsys):
+    assert run_cli("gen", cwd=tmp_path) != 0
+    assert "No Bender.yml" in capsys.readouterr().err
+
+
+def test_open_explains_a_browser_that_will_not_start(run_cli, project_dir, stub_bender,
+                                                     monkeypatch, capsys):
+    monkeypatch.setattr("webbrowser.open", lambda url: False)
+    assert run_cli("open", cwd=project_dir) == 0
+    assert "Open this URL manually" in capsys.readouterr().err
+
+
+class _FakeServer:
+    """Stands in for socketserver.TCPServer: accepts one request, then stops."""
+
+    served = False
+
+    def __init__(self, addr, handler):
+        self.addr = addr
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def serve_forever(self):
+        _FakeServer.served = True
+        raise KeyboardInterrupt
+
+
+def test_serve_builds_then_serves(run_cli, project_dir, stub_bender, monkeypatch):
+    import socketserver
+    _FakeServer.served = False
+    monkeypatch.setattr(socketserver, "TCPServer", _FakeServer)
+    assert run_cli("serve", "-p", "8123", cwd=project_dir) == 0
+    assert _FakeServer.served
+    assert (project_dir / project.DEFAULT_OUTPUT / "index.html").is_file()
+
+
+def test_serve_can_skip_the_build(run_cli, project_dir, stub_bender, monkeypatch):
+    import socketserver
+    assert _gen(run_cli, project_dir) == 0
+    monkeypatch.setattr(socketserver, "TCPServer", _FakeServer)
+    monkeypatch.setattr("svdocgraph.cli._build_design",
+                        lambda ctx: pytest.fail("--no-build must not re-elaborate"))
+    assert run_cli("serve", "--no-build", cwd=project_dir) == 0
+
+
+def test_serve_reports_a_busy_port(run_cli, project_dir, stub_bender, monkeypatch, capsys):
+    import socketserver
+
+    def busy(addr, handler):
+        raise OSError("Address already in use")
+
+    monkeypatch.setattr(socketserver, "TCPServer", busy)
+    assert run_cli("serve", cwd=project_dir) == 1
+    assert "Cannot listen on port" in capsys.readouterr().err
+
+
+def test_dump_also_stops_when_bender_fails(run_cli, project_dir, tmp_path, monkeypatch):
+    bindir = tmp_path / "bin2"
+    bindir.mkdir()
+    exe = bindir / "bender"
+    exe.write_text(
+        "#!/bin/sh\n"
+        '[ "$1" = "--version" ] && { echo "bender 0.28.1"; exit 0; }\n'
+        "echo 'error: no such target' >&2\nexit 1\n"
+    )
+    exe.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bindir}:{os.environ['PATH']}")
+    out = tmp_path / "design.json"
+    assert run_cli("dump", "-o", str(out), cwd=project_dir) == 4
+    assert not out.exists()
+
+
+def test_doctor_lists_graphviz_as_optional(run_cli, stub_bender, monkeypatch, capsys):
+    """Graphviz missing is a warning, not a failure: the site still builds."""
+    import shutil as _shutil
+    real = _shutil.which
+    monkeypatch.setattr(deps.shutil, "which",
+                        lambda name: None if name == "dot" else real(name))
+    assert run_cli("doctor") == 0
+    out = capsys.readouterr().out
+    assert "graphs will be omitted" in out
+
+
+def test_gen_warns_but_continues_without_graphviz(run_cli, project_dir, stub_bender,
+                                                  monkeypatch, capsys):
+    import shutil as _shutil
+    real = _shutil.which
+    monkeypatch.setattr(deps.shutil, "which",
+                        lambda name: None if name == "dot" else real(name))
+    monkeypatch.setattr("svdocgraph.graphs.have_dot", lambda: False)
+    assert _gen(run_cli, project_dir) == 0
+    assert "graphs will be omitted" in capsys.readouterr().err
     assert (project_dir / project.DEFAULT_OUTPUT / "index.html").is_file()

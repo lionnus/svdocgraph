@@ -99,7 +99,7 @@ def load_config(project_root: str) -> Config:
 
 
 CONFIG_TEMPLATE = """\
-# SVDocGraph project configuration - https://github.com/lkesting/svdocgraph
+# SVDocGraph project configuration - https://github.com/lionnus/svdocgraph
 # Every key is optional; delete what you do not need.
 
 # Where `svdocgraph gen` writes the site (relative to this file).
