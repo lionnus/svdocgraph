@@ -465,3 +465,19 @@ def test_a_directory_from_the_settings_gives_pages(run_cli, project_dir, stub_be
     page = project_dir / project.DEFAULT_OUTPUT / "doc-manual-bring_up.html"
     assert page.is_file()
     assert 'href="module-demo_top.html"' in page.read_text()
+
+
+def test_the_comment_above_a_module_becomes_a_page_section(run_cli, project_dir,
+                                                           stub_bender):
+    """The RTL carries its own documentation. hwpe-stream writes it in
+    reStructuredText in a `/** */` block above the module."""
+    assert _gen(run_cli, project_dir) == 0
+    out = project_dir / project.DEFAULT_OUTPUT
+    page = (out / "module-demo_top.html").read_text()
+    assert "module-doc" in page
+    assert "wires two adders in series" in page
+    assert 'href="module-demo_bus_if.html"' in page, "a bold name becomes a link"
+    assert "Solderpad" not in page, "the licence block is not the documentation"
+
+    model = json.loads((out / "model.json").read_text())
+    assert model["modules"]["demo_top"]["desc"].startswith("The demo_top module wires")

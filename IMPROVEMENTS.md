@@ -86,6 +86,22 @@ directory to Pages.
 - A project in a directory with a space in its name now works: slang divides a
   command file at each space, so each entry gets quotation marks.
 
+### The comment above a module
+
+- `driver.syntaxTrees` gives the parsed files that the elaboration already made.
+  Thus the tool reads the comments from the parser, and not with a regular
+  expression: a `/** */` block, a `//` block, and a comment before an `import`
+  each work.
+- slang attaches a comment to the token that follows it. A PULP file has the
+  licence block, then the documentation block, then often an import, then the
+  module. The extractor collects the blocks of each member and gives the last
+  one to the next module. A block that gives the licence is left out.
+- A comment with a directive or a role is reStructuredText; the other comments
+  are Markdown. On pulp-platform/hwpe-stream, 33 of the 41 modules give a
+  comment, and `hwpe_stream_source` gives 5.7 kB of reStructuredText.
+- A name of a module in the comment becomes a link. The PULP comments write the
+  name in bold, Markdown writes it in backticks; both work.
+
 ### Written documentation
 
 - The tool reads `README.md`, and the Markdown and reStructuredText files in

@@ -274,25 +274,50 @@ def _rewrite_media(html: str, rel_path: str, project_root: str, media: dict) -> 
     return _SRC.sub(repl, html)
 
 
-#: Markdown gives `code`. docutils gives `span class="docutils literal"` for a
-#: double backtick, and `cite` for a single backtick.
+#: Where a name of a unit appears. Markdown gives `code`. docutils gives
+#: `span class="docutils literal"` for a double backtick and `cite` for a single
+#: one. The comments in the PULP repositories put the name in bold.
 _CODE = re.compile(
     r'<code>([^<>]+)</code>'
     r'|<span class="docutils literal">([^<>]+)</span>'
     r'|<cite>([^<>]+)</cite>'
+    r'|<strong>([^<>]+)</strong>'
 )
 
 
 def link_names(html: str, targets: dict) -> str:
     """Makes a link from each name of a unit in the text."""
     def repl(m):
-        name = m.group(1) or m.group(2) or m.group(3)
+        name = m.group(1) or m.group(2) or m.group(3) or m.group(4)
         url = targets.get(name)
         if url is None:
             return m.group(0)
         return f'<a class="xref" href="{url}"><code>{name}</code></a>'
 
     return _CODE.sub(repl, html)
+
+
+#: A comment that has a directive or a role is reStructuredText. The comments in
+#: the PULP repositories use `.. figure::` and `:numref:`.
+_RST_MARKS = re.compile(r"^\s*\.\.\s+[a-z_-]+::|:[a-z]+:`", re.M)
+
+
+def render_comment(text: str) -> str:
+    """HTML from the documentation comment of a module.
+
+    The comment is Markdown or reStructuredText. A directive or a role shows
+    which one it is.
+    """
+    if not text.strip():
+        return ""
+    try:
+        if _RST_MARKS.search(text) and HAVE_RST:
+            return _render_rst(text)
+        if HAVE_MARKDOWN:
+            return _parser().render(text)
+    except Exception:
+        pass
+    return ""
 
 
 def _title(html: str, rel_path: str) -> str:

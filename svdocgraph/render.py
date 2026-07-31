@@ -122,6 +122,13 @@ class Renderer:
         docs.copy_media(self._doc_media, self.outdir)
         self._write_build_info()
 
+    @property
+    def _xref_targets(self) -> dict:
+        """The address of each unit, for a link in the text."""
+        targets = {n: f"module-{n}.html" for n in self.design.modules}
+        targets.update({n: f"package-{n}.html" for n in self.design.packages})
+        return targets
+
     def _load_docs(self) -> None:
         """Reads the Markdown files of the repository and makes HTML from them."""
         if not self.with_docs or not docs.HAVE_MARKDOWN or not self.design.project_root:
@@ -130,8 +137,7 @@ class Renderer:
         pages, media = docs.build_pages(self.design.project_root, rel_paths)
         docs.attach_to_modules(pages, self.design.modules)
         # A link to a unit makes the text navigable.
-        targets = {n: f"module-{n}.html" for n in self.design.modules}
-        targets.update({n: f"package-{n}.html" for n in self.design.packages})
+        targets = self._xref_targets
         for page in pages.values():
             page.html = docs.link_names(page.html, targets)
             if page.module:
@@ -242,13 +248,17 @@ class Renderer:
 
     def _render_module(self, name: str) -> None:
         mod = self.design.modules[name]
+        # The comment above the declaration is Markdown or reStructuredText.
+        comment_html = docs.link_names(docs.render_comment(mod.doc_comment),
+                                       self._xref_targets) if mod.doc_comment else ""
         dot = graphs.internal_dot(self.design, name)
         svg = _responsive(graphs.render_dot(dot)) if dot else None
         ports = {"in": [], "out": [], "inout": []}
         for p in mod.ports:
             ports.get(p.eff_dir, ports["inout"]).append(p)
         html = self.env.get_template("module.html").render(
-            **self._ctx(mod=mod, ports=ports, internal_svg=svg, active="module")
+            **self._ctx(mod=mod, ports=ports, internal_svg=svg,
+                        comment_html=comment_html, active="module")
         )
         self._write(f"module-{name}.html", html)
 

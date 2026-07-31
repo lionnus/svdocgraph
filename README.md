@@ -6,249 +6,93 @@
 [![python](https://img.shields.io/badge/python-3.9%20%E2%80%93%203.13-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-**[See an example site](https://lionnus.github.io/svdocgraph/)** — the documentation
-of [pulp-platform/axi](https://github.com/pulp-platform/axi), which CI makes with
-each change and publishes to GitHub Pages.
+**Documentation for SystemVerilog projects that use
+[Bender](https://github.com/pulp-platform/bender).** Run one command in your
+repository. The tool writes a web site that joins the text a person wrote with
+the facts that the RTL gives.
 
-SVDocGraph makes documentation for SystemVerilog designs that use
-[Bender](https://github.com/pulp-platform/bender).
+**[Open the example site](https://lionnus.github.io/svdocgraph/)** — the
+documentation of [pulp-platform/axi](https://github.com/pulp-platform/axi).
 
-The tool reads a Bender project and writes a static web site. The site shows the
-design hierarchy, the ports and the parameters of each module, and a block diagram
-of the contents of each module. The site also contains the Markdown documentation
-of the repository. Thus one site gives the full documentation of the project: the
-text that a person wrote, and the data that the tool reads from the RTL.
+## What you get
 
-The tool uses [slang](https://github.com/MikePopoloski/slang), through `pyslang`,
-to elaborate the design. Thus the tool expands the macros, resolves the parameter
-values, calculates the port widths, and reads the instance tree from the elaborated
-design. The tool does not guess this data from the source text.
+- **A block diagram for each module**, with the child instances and the signals
+  between them. Interfaces are included.
+- **A page for each module**: the ports with their resolved type and width, the
+  parameter values, the clocks, the resets, and the parent modules.
+- **The comment above the module**, as text on its page. A name in that comment
+  becomes a link to the module.
+- **The Markdown and the reStructuredText of the repository**, in the same site.
+  A page with the name of a module attaches to that module.
+- **Graphs of the hierarchy, the source files and the Bender packages.**
+- **One search** over the modules, the ports, the packages and the text.
 
-## Features
+Nothing is guessed from the source text.
+[slang](https://github.com/MikePopoloski/slang) elaborates the design, thus the
+macros are expanded, the parameters are resolved and the widths are calculated.
 
-- **Block diagram for each module.** The diagram shows the child instances and the
-  signals between them. Interfaces and buses are included.
-- **Module pages.** Each page shows the ports in groups by direction. Each port has
-  its resolved type and width. Each page also shows the parameter values, the child
-  instances, the clocks, the resets, and the parent modules.
-- **Hierarchy graph.** The graph shows the instance tree. Click on a module to open
-  its page.
-- **Package graph.** The graph shows the Bender dependencies with their versions,
-  their locked revisions and their sources.
-- **The written documentation.** The tool reads the README, and the Markdown and
-  reStructuredText files in `doc/` or `docs/`. It puts those pages in the same
-  site. A page with the name of a module attaches to the page of that module. In
-  the text, the name of a module becomes a link to it.
-- **File graph.** The graph shows each source file of the repository and the files
-  that it needs.
-- **Search.** Push `/` or Ctrl-K to search for a module, a port, a package or a
-  written page.
-- **Offline output.** The site contains only HTML, CSS, JavaScript and SVG. A server
-  is not necessary. Copy the directory to any static web host.
+## Start
 
-## Requirements
-
-| Item | Function | Necessary | Installation |
-| --- | --- | --- | --- |
-| [`bender`](https://github.com/pulp-platform/bender) | Gives the source files, the include directories, the macro definitions and the package of each file | Yes | `curl https://pulp-platform.github.io/bender/init -sSf \| sh` |
-| [Graphviz](https://graphviz.org/) (`dot`) | Calculates the layout of each graph | Recommended | `apt install graphviz` or `brew install graphviz` |
-| `pyslang` 11 | Elaborates the design | Yes | Installed with the tool |
-| `Jinja2`, `PyYAML` | Makes the HTML pages and reads the Bender files | Yes | Installed with the tool |
-| `markdown-it-py` | Reads the Markdown files of the repository | Yes | Installed with the tool |
-| `docutils` | Reads the reStructuredText files of a Sphinx project | Yes | Installed with the tool |
-
-A simulator or a licence is not necessary. The slang compiler is included in the
-`pyslang` package.
-
-The `pyslang` version limit is a requirement. In version 11 the `Driver` class moved
-to `pyslang.driver`. With an older version the tool finds no modules.
-
-To show the status of each item, run this command:
-
-```sh
-svdocgraph doctor
-```
-
-If `bender` is not available, the tool stops with exit code 3. If Graphviz is not
-available, the tool gives a warning and writes the pages without the graphs.
-
-## Installation
-
-Install the tool one time. Then use it in each Bender project. The tool does not add
-files to the project.
+`bender` and [Graphviz](https://graphviz.org/) must be on the `PATH`. A simulator
+is not necessary.
 
 ```sh
 uv tool install svdocgraph      # or: pipx install svdocgraph
-```
-
-To use the tool without installation, run `uvx svdocgraph gen`.
-
-## Usage
-
-Run the tool in a Bender project. The tool finds the project root. The project root
-is the nearest parent directory that contains a `Bender.yml` file.
-
-```sh
 cd my-bender-project
 svdocgraph gen --open
 ```
 
-The tool elaborates the design, writes the documentation to `.svdocgraph/`, and opens
-the documentation in the web browser.
+The tool writes the documentation to `.svdocgraph/` and opens it in the browser.
+It adds that directory to your `.gitignore`. Later, `svdocgraph open` opens the
+documentation again.
 
 | Command | Function |
 | --- | --- |
 | `svdocgraph gen` | Makes the documentation in `.svdocgraph/` |
-| `svdocgraph gen --open` | Makes the documentation and opens it |
-| `svdocgraph open` | Opens the last documentation. Makes it first if it is not available |
-| `svdocgraph serve` | Makes the documentation and serves it on `http://localhost:8080` |
-| `svdocgraph gen -o public` | Writes the documentation to a different directory |
-| `svdocgraph init` | Writes `svdocgraph.yml` and a `.gitignore` rule |
+| `svdocgraph open` | Opens it. Makes it first if it is not available |
+| `svdocgraph serve` | Makes it, then serves it on `http://localhost:8080` |
+| `svdocgraph gen -o public` | Writes it to another directory, for a web host |
 | `svdocgraph doctor` | Shows the status of the necessary programs |
-| `svdocgraph dump -o design.json` | Writes only the design data as JSON |
+| `svdocgraph init` | Writes an optional `svdocgraph.yml` |
 
-The name `build` is an alternative for `gen`.
+For `make`, add a rule that calls `svdocgraph gen -q`.
 
-Configuration is not necessary. The tool asks `bender` for the source files, the
-include directories, the macro definitions and the package of each file. The tool
-then elaborates each module of the root package. Use `--top NAME` to add a module
-that only a testbench instantiates.
-
-### Output
-
-The tool writes the documentation to `.svdocgraph/` in the project root. This
-directory has one owner: the tool. Thus the project needs only one `.gitignore` rule,
-and the output cannot mix with a manual `docs/` directory. The first `gen` command
-adds the rule to the `.gitignore` file of the repository.
-
-To read the documentation, open `.svdocgraph/index.html` in a web browser. The
-search function, the graphs and the theme operate offline.
-
-The `gen` command does not write into a directory that contains other files. To
-replace such a directory, use the `--force` option.
-
-### The written documentation
-
-The tool reads:
-
-- `README.md` in the project root;
-- each `.md` and `.rst` file in `doc/`, `docs/` and `documentation/`;
-- the directory that `.readthedocs.yaml` gives, if the project has that file. A
-  `configuration: conf.py` means the root of the repository.
-
-A page that has the name of a module attaches to that module. For example,
-`doc/axi_xbar.md` and the module `axi_xbar` link to each other.
-
-For a Sphinx project, docutils reads the standard directives. It cannot run a
-Sphinx extension, thus a `wavedrom` or a `toctree` directive gives no output. A
-`raw` directive also gives no output, because raw HTML must not enter the site.
-
-### Configuration
-
-The `svdocgraph init` command writes an `svdocgraph.yml` file. Then the `svdocgraph
-gen` command, and a `make` rule that calls it, do not need options. Each key is
-optional.
+Settings are not necessary. `svdocgraph.yml` can give the output directory, more
+top modules, the title, and more directories with documentation:
 
 ```yaml
-output: .svdocgraph        # Directory for the documentation
-tops: [my_testbench_top]   # Additional top modules to elaborate
-name: My Design            # Title in the page header
-docs: [manual]             # More directories with Markdown. `false` reads none
+output: .svdocgraph
+tops: [my_testbench_top]
+name: My Design
+docs: [manual]             # `false` reads no written documentation
 ```
 
-### Integration in a project
+If a run fails, `svdocgraph doctor` shows which program is missing. `gen` stops
+with exit code 3 when `bender` is not available, and with 4 when `bender` cannot
+resolve the dependencies. It then shows the message from `bender`.
 
-To make the documentation from `make`, add this rule:
-
-```makefile
-.PHONY: docs
-docs:
-	svdocgraph gen -q
-```
-
-To publish the documentation from GitLab CI, add this job:
-
-```yaml
-pages:
-  image: python:3.12
-  script:
-    - pip install svdocgraph
-    - apt-get update && apt-get install -y graphviz bender
-    - svdocgraph gen -o public
-  artifacts:
-    paths: [public]
-```
-
-## Operation
-
-```
-Bender.yml / Bender.lock
-        |  bender script flist-plus   (sources, include dirs, defines)
-        |  bender sources -f          (file -> package)
-        v
-   slang / pyslang    elaborates each module of the root package
-        v
-   design model       modules, ports, parameters, instances, connections
-        +  README.md, doc/*.md    (the written documentation)
-        v
-   Graphviz + Jinja   block diagrams, hierarchy, files, packages, written pages
-```
-
-## Development
+## Contribute
 
 ```sh
+git clone https://github.com/lionnus/svdocgraph && cd svdocgraph
 uv sync --extra dev
-uv run pytest                  # 202 tests
-uv run pytest --cov            # tests with the coverage report
+uv run pytest          # A substitute for bender, thus the tests run anywhere
 uv run ruff check .
 ```
 
-The tests use a small design in `tests/fixtures/demo` and a substitute for `bender`.
-Thus an installation of `bender` is not necessary, and the tests operate on each
-platform.
+Then open a pull request. CI runs `ruff`, the tests on Python 3.9 to 3.13, and
+the coverage measurement. It then makes the documentation of two real designs,
+[`opope`](https://github.com/pulp-platform/opope) and
+[`datamover`](https://github.com/pulp-platform/datamover), with the true
+`bender`, and examines the result. New code needs tests: `pyproject.toml` gives
+the minimum coverage, and CI stops below it.
 
-Coverage is 97% of the statements and the branches. There are two controls:
-
-- `fail_under` in `pyproject.toml` stops a local run and a CI job that goes below
-  the agreed minimum. Do not decrease this value to make a failed job pass.
-- Codecov shows the coverage of each pull request, and which new lines have no
-  test. The settings are in `codecov.yml`.
-
-The tests were examined with a mutation experiment: 31 faults were put into the
-code on purpose, one at a time. The tests found each of them.
-
-Three workflows operate in CI:
-
-- **`ci`** — runs `ruff`, then the tests on Python 3.9 to 3.13, then the coverage
-  measurement. The last job builds the wheel, installs it in an empty environment,
-  and runs the installed command. The templates, the style sheet, the JavaScript and
-  the fonts must be in the wheel.
-- **`integration`** — makes documentation for two
-  [PULP Platform](https://github.com/pulp-platform) designs with the true `bender`.
-
-  | Design | Type | Result |
-  | --- | --- | --- |
-  | [`opope`](https://github.com/pulp-platform/opope) | Outer-product engine with 14 dependencies | 41 units, 2 interfaces, 0 diagnostics |
-  | [`datamover`](https://github.com/pulp-platform/datamover) | HWPE accelerator with stream and HCI interfaces | 20 units, 3 interfaces, 0 diagnostics |
-
-  Each job makes sure that the tool found the expected modules, the expected
-  interfaces and no diagnostics. `scripts/check_site.py` contains these tests. Each
-  job also keeps the documentation as an artifact. You can download the artifact and
-  read it.
-
-- **`pages`** — makes the documentation of `pulp-platform/axi` and publishes it to
-  [GitHub Pages](https://lionnus.github.io/svdocgraph/). The example shows both
-  parts that this tool joins: the interfaces of the RTL, and the written page for
-  each large module in `doc/`.
-
-Each design has a fixed tag or commit. Thus a change in a design cannot cause a
-failure in a pull request. The weekly job finds a failure that a new version of
-`bender`, `pyslang`, Graphviz or the runner image causes. To change a version, make
-a commit.
+[`IMPROVEMENTS.md`](IMPROVEMENTS.md) gives the design of the tool, the known
+limitations, and the ideas for later work.
 
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
 
-The IBM Plex fonts in `svdocgraph/assets/fonts` have the SIL Open Font License 1.1.
-See `svdocgraph/assets/fonts/OFL.txt`.
+The IBM Plex fonts in `svdocgraph/assets/fonts` have the SIL Open Font License
+1.1. See `svdocgraph/assets/fonts/OFL.txt`.

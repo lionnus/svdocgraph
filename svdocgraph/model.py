@@ -116,7 +116,8 @@ class Module:
     rel_file: str = ""         # The path from the project root
     package: str = ""          # The Bender package that owns the file
     line: int = 0
-    desc: str = ""             # The comment above the declaration
+    desc: str = ""             # The first sentence of the comment
+    doc_comment: str = ""      # The full comment above the declaration
     elaborated: bool = False   # True if slang resolved the ports and the types
     # Filled after the extraction
     instantiated_by: list[str] = field(default_factory=list)

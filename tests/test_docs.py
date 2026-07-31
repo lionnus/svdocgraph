@@ -268,3 +268,28 @@ def test_a_broken_read_the_docs_file_is_ignored(tmp_path):
 
 def test_no_read_the_docs_file_gives_no_directory(tmp_path):
     assert docs.read_rtd_dirs(str(tmp_path)) == []
+
+
+# -- the documentation comment of a module ---------------------------------
+
+
+def test_a_comment_with_a_directive_is_restructuredtext():
+    html = docs.render_comment("The module moves data.\n\n.. figure:: img/a.png\n")
+    assert "<p>The module moves data.</p>" in html
+
+
+def test_a_comment_without_a_directive_is_markdown():
+    html = docs.render_comment("The **module** moves `data`.\n")
+    assert "<strong>module</strong>" in html and "<code>data</code>" in html
+
+
+def test_an_empty_comment_gives_no_html():
+    assert docs.render_comment("   \n") == ""
+
+
+def test_a_name_in_bold_becomes_a_link():
+    """The comments in the PULP repositories put the name of a module in bold."""
+    html = docs.render_comment("The **demo_adder** adds. **Name** is not a module.")
+    linked = docs.link_names(html, {"demo_adder": "module-demo_adder.html"})
+    assert '<a class="xref" href="module-demo_adder.html"><code>demo_adder</code></a>' in linked
+    assert "<strong>Name</strong>" in linked

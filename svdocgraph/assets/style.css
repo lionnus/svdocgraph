@@ -259,3 +259,7 @@ th.num, td.num { text-align:right; font-variant-numeric:tabular-nums; }
 .nav-docs .nav-group-title { color: var(--accent); }
 .ico-doc { background: var(--accent); color: #fff; }
 .pill-doc { background: var(--accent); color: #fff; }
+/* The documentation comment of a module. */
+.module-doc { font-size: 14px; }
+.module-doc > :first-child { margin-top: 0; }
+.module-doc > :last-child { margin-bottom: 0; }

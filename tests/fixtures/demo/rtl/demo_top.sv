@@ -1,4 +1,17 @@
-// Top: two submodules wired by an internal net, plus an interface instance.
+/*
+ * demo_top.sv
+ * Copyright (C) 2026 ETH Zurich
+ * Licensed under the Solderpad Hardware License
+ */
+
+/**
+ * The **demo_top** module wires two adders in series. The net between them is
+ * ``mid``. It also declares one **demo_bus_if** interface.
+ *
+ * .. figure:: img/demo_top.png
+ *
+ *   The structure of the top module.
+ */
 module demo_top
   import demo_pkg::*;
 #(
