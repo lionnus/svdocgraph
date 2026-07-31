@@ -185,19 +185,28 @@ Two workflows run in CI:
   entry point (the templates, CSS, JS and fonts must ship inside it).
 - **`integration`** — generates documentation for two real
   [PULP Platform](https://github.com/pulp-platform) designs with a real `bender`:
-  [`common_cells`](https://github.com/pulp-platform/common_cells) (many small,
-  heavily parameterised modules) and [`axi`](https://github.com/pulp-platform/axi)
-  (SV interfaces with modports). Each run asserts a floor on what was extracted —
-  module and interface counts, specific units such as `AXI_BUS`, zero
-  diagnostics, graphs actually rendered — and uploads the generated site as a
-  build artifact you can download and browse. It runs on every push and pull
-  request, plus weekly.
 
-The designs are pinned to a release tag, so upstream RTL changes cannot turn a
+  | design | why | extracted |
+  | --- | --- | --- |
+  | [`cv32e40p`](https://github.com/pulp-platform/cv32e40p) @ `vega_v1.3.4` | a processor core: deep hierarchy from core through the pipeline stages to ALU, LSU and register file | 26 units, 0 diagnostics |
+  | [`datamover`](https://github.com/pulp-platform/datamover) @ `f14d4db` | an HWPE accelerator: hwpe-stream, HCI and hwpe-ctrl interfaces wiring an engine to a streamer | 20 units, 3 interfaces, 0 diagnostics |
+
+  Each run asserts a floor on what was extracted — module and interface counts,
+  named units such as `riscv_core` and `hci_core_intf`, zero diagnostics, graphs
+  actually rendered — and uploads the generated site as a build artifact you can
+  download and browse. It runs on every push and pull request, plus weekly.
+
+The designs are pinned to a tag or commit, so upstream RTL changes cannot turn a
 pull request red; the weekly run is what catches breakage from the things that do
 float (a new bender, pyslang, Graphviz or runner image). Bumping a pin is a
 deliberate commit. `scripts/check_site.py` holds the assertions and can be pointed
 at any generated site by hand.
+
+`cv32e40p` is pinned to `vega_v1.3.4` because that is the newest tag whose
+`Bender.yml` still resolves. On `master` — and on the openhwgroup fork, up to and
+including `cv32e40p_v1.8.3` — `bender` fails with a `tech_cells_generic`
+requirement conflict, and two files listed under `sources` no longer exist in the
+tree. Both designs are used exactly as published; nothing is patched.
 
 ## License
 

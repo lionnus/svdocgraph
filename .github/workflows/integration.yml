@@ -7,7 +7,7 @@ name: integration
 # elaborating a large third-party design whose sources, include dirs and defines
 # come from an actual bender resolve.
 #
-# Designs are pinned to a release tag so a run is reproducible and an upstream RTL
+# Designs are pinned to a tag or commit so a run is reproducible and an upstream RTL
 # change can never turn a pull request red. Bumping a pin is a deliberate commit.
 # The weekly run keeps the pinned designs honest against everything that *does*
 # float: a new bender release, a new pyslang within the supported range, a new
@@ -36,27 +36,41 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Foundation library: many small, heavily parameterised modules.
-          - name: common_cells
-            repo: pulp-platform/common_cells
-            ref: v1.40.0
+          # A processor core: deep instance hierarchy (core -> pipeline stages ->
+          # ALU/LSU/register file), package imports, `define-driven parameters.
+          #
+          # Pinned to vega_v1.3.4 because it is the newest tag whose Bender.yml
+          # actually resolves: on master (and on the openhwgroup fork, including
+          # cv32e40p_v1.8.3) bender fails with a tech_cells_generic requirement
+          # conflict, and two files listed under `sources` no longer exist in the
+          # tree. Nothing here is patched - the repository is used as published.
+          - name: cv32e40p
+            repo: pulp-platform/cv32e40p
+            ref: vega_v1.3.4
             checks: >-
-              --min-modules 90
-              --want-module cdc_2phase
-              --want-module fifo_v3
-              --want-module stream_arbiter
-          # Interface-heavy: SV interfaces with modports, the case that
-          # distinguishes this tool from a text-scraping doc generator.
-          - name: axi
-            repo: pulp-platform/axi
-            ref: v0.39.10
+              --min-modules 24
+              --want-module riscv_core
+              --want-module riscv_id_stage
+              --want-module riscv_ex_stage
+              --want-module riscv_if_stage
+              --want-module riscv_load_store_unit
+              --want-module riscv_cs_registers
+          # An HWPE accelerator: the streaming/interface style this tool exists
+          # for - hwpe-stream, HCI and hwpe-ctrl interfaces wiring an engine to a
+          # streamer, with most units coming from dependencies rather than the
+          # root package.
+          - name: datamover
+            repo: pulp-platform/datamover
+            ref: f14d4db2a72c08b43b3511013e821a4600f6ef56
             checks: >-
-              --min-modules 120
-              --min-interfaces 5
-              --want-interface AXI_BUS
-              --want-interface AXI_LITE
-              --want-module axi_xbar
-              --want-module axi_cdc
+              --min-modules 18
+              --min-interfaces 3
+              --want-interface hwpe_stream_intf_stream
+              --want-interface hci_core_intf
+              --want-interface hwpe_ctrl_intf_periph
+              --want-module datamover_top_wrap
+              --want-module datamover_engine
+              --want-module datamover_streamer
     steps:
       - name: Check out svdocgraph
         uses: actions/checkout@v4

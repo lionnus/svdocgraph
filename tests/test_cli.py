@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 
 import pytest
@@ -153,6 +154,34 @@ def test_missing_bender_fails_with_a_hint(run_cli, project_dir, monkeypatch, cap
     assert run_cli("gen", cwd=project_dir) == 3
     err = capsys.readouterr().err
     assert "bender" in err and "pulp-platform" in err
+    assert not (project_dir / project.DEFAULT_OUTPUT).exists()
+
+
+def test_failing_bender_is_reported_in_its_own_words(run_cli, project_dir, tmp_path,
+                                                     monkeypatch, capsys):
+    """An unresolvable dependency is the most common real failure; bender explains
+    it well, so that explanation must reach the user rather than 'no modules'."""
+    bindir = tmp_path / "badbin"
+    bindir.mkdir()
+    exe = bindir / "bender"
+    exe.write_text(
+        "#!/bin/sh\n"
+        'case "$1 $2" in\n'
+        '  "--version ") echo "bender 0.28.1"; exit 0 ;;\n'
+        "esac\n"
+        'echo "     Cloning common_cells (https://github.com/pulp-platform/x.git)" >&2\n'
+        "printf '\\033[31;1merror:\\033[m Requirement `^0.2.11` conflicts with other "
+        "requirements on dependency `tech_cells_generic`.\\n' >&2\n"
+        "exit 1\n"
+    )
+    exe.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bindir}:{os.environ['PATH']}")
+
+    assert run_cli("gen", cwd=project_dir) == 4
+    err = capsys.readouterr().err
+    assert "conflicts with other requirements" in err
+    assert "\x1b[31;1merror" not in err, "bender's colour codes must be stripped"
+    assert "Cloning" not in err, "progress noise must not bury the error"
     assert not (project_dir / project.DEFAULT_OUTPUT).exists()
 
 

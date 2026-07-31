@@ -68,11 +68,17 @@ class Ctx:
         return rel if not rel.startswith("..") else self.outdir
 
 
+class BenderFailed(Exception):
+    """bender could not describe the project; its message is the payload."""
+
+
 def _build_design(ctx: Ctx):
     _log(f"Project: {ctx.root}")
     if ctx.config.found:
         _log(f"Config:  {os.path.relpath(ctx.config.path, ctx.root)}")
     info = bender.collect(ctx.root)
+    if info.failure:
+        raise BenderFailed(info.failure)
     if info.root_package:
         _log(f"Bender root package: \033[1m{info.root_package}\033[0m "
              f"({len(info.root_files)} source files, {len(info.packages)} deps)")
@@ -90,6 +96,15 @@ def _build_design(ctx: Ctx):
     for d in design.diagnostics[:8]:
         _warn(d)
     return design
+
+
+def _bender_failed(exc: Exception) -> None:
+    """Report a bender failure with bender's own words, not a generic message."""
+    _err("bender could not describe this project:")
+    for line in str(exc).splitlines():
+        print(f"    {line}", file=sys.stderr)
+    _err("Fix the bender setup first - `bender checkout` usually reports the same "
+         "problem. Nothing was written.")
 
 
 def _preflight() -> int:
@@ -118,7 +133,11 @@ def _generate(ctx: Ctx, force: bool) -> int:
         _err("Refusing to overwrite it. Pass --force, or pick another -o directory.")
         return 2
 
-    design = _build_design(ctx)
+    try:
+        design = _build_design(ctx)
+    except BenderFailed as exc:
+        _bender_failed(exc)
+        return 4
     if not design.modules:
         _err("No modules extracted - nothing to render.")
         return 1
@@ -250,7 +269,11 @@ def cmd_dump(args) -> int:
     if rc:
         return rc
     ctx = Ctx(args, use_output=False)
-    design = _build_design(ctx)
+    try:
+        design = _build_design(ctx)
+    except BenderFailed as exc:
+        _bender_failed(exc)
+        return 4
     with open(args.output, "w") as fh:
         json.dump(design.to_json(), fh, indent=2)
     _ok(f"Wrote {args.output}")

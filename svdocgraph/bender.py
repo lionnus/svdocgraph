@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -32,18 +33,46 @@ class BenderInfo:
     packages: dict[str, BenderPackage] = field(default_factory=dict)
     root_files: list[str] = field(default_factory=list)   # files owned by root pkg
     diagnostics: list[str] = field(default_factory=list)
+    #: Why bender could not describe this project at all, if it could not. Set when
+    #: `bender script flist-plus` fails - typically an unresolvable dependency or a
+    #: missing checkout. Carries bender's own message, which is the actionable part.
+    failure: str = ""
 
 
 def have_bender() -> bool:
     return shutil.which("bender") is not None
 
 
-def _run(args: list[str], cwd: str) -> str | None:
+def _run(args: list[str], cwd: str) -> tuple[str | None, str]:
+    """Run a bender command. Returns ``(stdout, error)``; *stdout* is None on failure.
+
+    bender explains itself well ("Requirement `^0.2.11` conflicts with ..."), so its
+    stderr is kept and shown rather than reduced to "the command failed".
+    """
     try:
         out = subprocess.run(args, cwd=cwd, capture_output=True, text=True, check=True)
-        return out.stdout
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return None
+    except subprocess.CalledProcessError as exc:
+        return None, _clean_error(exc.stderr or exc.stdout or "")
+    except FileNotFoundError:
+        return None, "bender is not on the PATH"
+    return out.stdout, ""
+
+
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _clean_error(text: str) -> str:
+    """Reduce bender's output to the part that explains the failure.
+
+    bender colours its output and interleaves progress ("Cloning ...") with the
+    diagnosis, so strip the colours and start at the first ``error:`` line.
+    """
+    lines = [_ANSI.sub("", ln).rstrip() for ln in text.strip().splitlines()]
+    lines = [ln for ln in lines if ln.strip()]
+    for i, ln in enumerate(lines):
+        if ln.lstrip().lower().startswith("error"):
+            return "\n".join(lines[i:i + 6])
+    return "\n".join(lines[-6:])
 
 
 def _read_root_name(project_root: str) -> str:
@@ -98,13 +127,17 @@ def collect(project_root: str) -> BenderInfo:
 
     info.root_package = _read_root_name(project_root)
 
-    flist = _run(["bender", "script", "flist-plus"], project_root)
+    flist, err = _run(["bender", "script", "flist-plus"], project_root)
     if flist is None:
-        info.diagnostics.append("`bender script flist-plus` failed.")
-    else:
-        info.flist_plus = flist
+        # Without the file list there is nothing to elaborate: this is fatal, and
+        # bender's own message is the only useful thing to show.
+        info.failure = err or "`bender script flist-plus` failed."
+        return info
+    info.flist_plus = flist
 
-    sources = _run(["bender", "sources", "-f"], project_root)
+    sources, err = _run(["bender", "sources", "-f"], project_root)
+    if sources is None and err:
+        info.diagnostics.append(f"`bender sources -f` failed; provenance disabled:\n{err}")
     if sources:
         try:
             data = json.loads(sources)
