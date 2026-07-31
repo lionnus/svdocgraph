@@ -4,7 +4,7 @@
 <div class="page-head"><div>
   <div class="eyebrow">Bender</div>
   <h1>Dependencies</h1>
-  <p class="lede">Package dependency graph from <code>Bender.yml</code> / <code>Bender.lock</code>.</p>
+  <p class="lede">The packages that <code>Bender.yml</code> and <code>Bender.lock</code> give.</p>
 </div></div>
 
 <section class="card">
@@ -13,10 +13,10 @@
   <figure class="graph" data-zoom>{{ package_svg|safe }}
     <figcaption class="graph-tools">
       <button data-zoom-in>+</button><button data-zoom-out>-</button><button data-zoom-reset>reset</button>
-      <span class="graph-hint">click a package to see its modules</span>
+      <span class="graph-hint">click a package to open it</span>
     </figcaption>
   </figure>
-  {% else %}<p class="empty">Install Graphviz to render the graph.</p>{% endif %}
+  {% else %}<p class="empty">Graphviz is not installed. Install it to get the graphs.</p>{% endif %}
 </section>
 
 <section class="card">

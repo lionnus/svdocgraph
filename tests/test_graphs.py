@@ -212,3 +212,60 @@ def test_the_file_graph_has_no_edge_from_a_file_to_itself(design):
     design.modules["top"].rel_file = "rtl/all.sv"
     design.modules["adder"].rel_file = "rtl/all.sv"
     assert '"rtl/all.sv" -> "rtl/all.sv"' not in graphs.file_dot(design)
+
+
+def test_the_file_graph_opens_the_code_of_a_file(design):
+    from svdocgraph.model import SourceFile
+    design.modules["top"].rel_file = "rtl/top.sv"
+    design.modules["adder"].rel_file = "rtl/adder.sv"
+    design.sources["src-rtl-top-sv"] = SourceFile(slug="src-rtl-top-sv",
+                                                  rel_path="rtl/top.sv")
+    dot = graphs.file_dot(design)
+    assert 'href="src-rtl-top-sv.html"' in dot
+    assert 'href="src-rtl-adder-sv.html"' not in dot, "that file has no page"
+
+
+# -- interfaces in the internal graph ---------------------------------------
+
+
+@pytest.fixture
+def with_interface(design) -> Design:
+    """`top` gets an interface port and an interface that it declares."""
+    d = design
+    d.modules["demo_if"] = Module(name="demo_if", kind="interface", package="demo_ip")
+    d.modules["top"].ports.append(
+        Port("bus", "interface", is_interface=True, interface="demo_if", modport="master")
+    )
+    d.modules["top"].instances.append(
+        Instance(name="stream", module="demo_if", is_interface=True)
+    )
+    d.modules["top"].instances[0].conns.append(PortConn("bus_i", "bus"))
+    d.modules["top"].instances[1].conns.append(PortConn("bus_i", "bus"))
+    d.modules["top"].instances[0].conns.append(PortConn("s_o", "stream"))
+    d.modules["top"].instances[1].conns.append(PortConn("s_i", "stream"))
+    return d
+
+
+def test_an_interface_port_is_a_bidirectional_pin(with_interface):
+    dot = graphs.internal_dot(with_interface, "top")
+    assert '"p__bus" [shape=hexagon' in dot, "an interface has no direction in the language"
+    assert '"p__x_i" [shape=cds' in dot, "`input` gives the direction"
+
+
+def test_an_interface_port_opens_its_declaration(with_interface):
+    assert 'href="module-demo_if.html"' in graphs.internal_dot(with_interface, "top")
+
+
+def test_a_signal_that_carries_an_interface_opens_its_declaration(with_interface):
+    dot = graphs.internal_dot(with_interface, "top")
+    assert '"n__stream" [href="module-demo_if.html"' in dot
+    assert graphs.C_IFACE in dot, "the interface has its own colour"
+
+
+def test_a_signal_that_is_not_an_interface_has_no_link(with_interface):
+    assert '"n__mid" [label=' in graphs.internal_dot(with_interface, "top")
+
+
+def test_a_link_needs_a_unit_that_the_tool_found(design):
+    assert graphs._link(design, "") == ""
+    assert graphs._link(design, "not_extracted") == ""

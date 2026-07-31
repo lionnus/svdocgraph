@@ -35,9 +35,14 @@ dependencies). The following works today:
 
 `svdocgraph gen` is the supported way to generate the documentation. It requires
 `bender` and Graphviz (`dot`) on the `PATH`; the slang compiler ships with the
-`pyslang` dependency. To wire it into a project, add a target that runs it (see the
-`docs` example in the README) or run it as a CI job that publishes the output
+`pyslang` dependency. To wire it into a project, add a target that runs it (see
+the `docs` example in the README) or run it as a CI job that publishes the output
 directory to Pages.
+
+`svdocgraph check <dir>` examines the result and gives exit code 1 if it is not
+complete. A design that no longer elaborates gives a site with no module and no
+error, thus a pipeline that only runs `gen` cannot see the failure. The two
+workflows of this repository use the same command as a user does.
 
 ### Project ergonomics
 
@@ -96,9 +101,13 @@ directory to Pages.
   licence block, then the documentation block, then often an import, then the
   module. The extractor collects the blocks of each member and gives the last
   one to the next module. A block that gives the licence is left out.
-- A comment with a directive or a role is reStructuredText; the other comments
-  are Markdown. On pulp-platform/hwpe-stream, 33 of the 41 modules give a
-  comment, and `hwpe_stream_source` gives 5.7 kB of reStructuredText.
+- A comment with a directive or a role is reStructuredText. A comment with a
+  command that starts with `@` or with a backslash is Doxygen: `@brief`, `@param`
+  and `@note` become Markdown, then the usual renderer makes the HTML. Doxygen
+  has no parser for SystemVerilog, thus only its comment style is common: `///`
+  and `//!` open a documentation line, and `/*!` opens a block.
+  On pulp-platform/hwpe-stream, 33 of the 41 modules give a comment, and
+  `hwpe_stream_source` gives 5.7 kB of reStructuredText.
 - A name of a module in the comment becomes a link. The PULP comments write the
   name in bold, Markdown writes it in backticks; both work.
 - A comment can come from an `include` file. `hci_helpers.svh` ends with
@@ -123,6 +132,17 @@ directory to Pages.
   because the lexer is slow on a large file. A file of more than 4 MB gets no page.
 - The pages operate without Pygments. The tool then writes the same table, with
   the line numbers but with no colours.
+
+### The graphs
+
+- The direction of a port comes from the declaration, and not from the name. An
+  interface port has no direction in the language: the pin is a hexagon, which
+  shows that the signals go in two directions, and the modport gives the side.
+- A node opens what it shows: an instance opens the module, an interface port and
+  an interface signal open the interface, and a file opens the code.
+- An element of an instance array has no name of its own. The extractor takes the
+  name from the array, thus `hci_core_intf virt_tcdm [1:0] (...)` and a module
+  array are in the model. Before this, they were not.
 
 ### Written documentation
 

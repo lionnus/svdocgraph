@@ -23,12 +23,11 @@
 <section class="card card-flat">
   <div class="chiprow">
     {% for name, line in src.units %}
-    <a class="chip" href="#L-{{ line or 1 }}">{{ name }}<span class="chip-sub">line {{ line or '?' }}</span></a>
+    <span class="chip"><a href="module-{{ name }}.html">{{ name }}</a>
+      <span class="chip-sub"><a href="#L-{{ line or 1 }}">line {{ line or '?' }}</a></span>
+    </span>
     {% endfor %}
   </div>
-  <p class="muted">The page of each unit:
-    {% for name, line in src.units %}<a class="mono" href="module-{{ name }}.html">{{ name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}.
-  </p>
 </section>
 {% endif %}
 

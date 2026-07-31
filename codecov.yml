@@ -28,4 +28,3 @@ comment:
 
 ignore:
   - "tests/**"
-  - "scripts/**"

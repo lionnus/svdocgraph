@@ -4,9 +4,8 @@
 <div class="page-head"><div>
   <div class="eyebrow">Design map</div>
   <h1>Source files</h1>
-  <p class="lede">How the files of this repository connect. An edge goes from a file to
-  each file that it needs, because it instantiates a module or an interface that the
-  other file declares.</p>
+  <p class="lede">An edge goes from a file to each file that declares a module or an
+  interface that it instantiates.</p>
 </div></div>
 
 <section class="card">
@@ -14,11 +13,11 @@
   <figure class="graph graph-tall" data-zoom>{{ file_svg|safe }}
     <figcaption class="graph-tools">
       <button data-zoom-in>+</button><button data-zoom-out>-</button><button data-zoom-reset>reset</button>
-      <span class="graph-hint">scroll to zoom · drag to pan</span>
+      <span class="graph-hint">scroll to zoom · drag to move · click a file to read the code</span>
     </figcaption>
   </figure>
   {% else %}
-  <p class="empty">Graphviz <code>dot</code> not found - install Graphviz to render graphs.</p>
+  <p class="empty">Graphviz is not installed. Install it to get the graphs.</p>
   {% endif %}
 </section>
 

@@ -72,12 +72,14 @@ def _clean_comment(raw: str) -> str:
     """
     text = raw.strip()
     if text.startswith("/*"):
-        text = text[3:] if text.startswith("/**") else text[2:]
+        # `/*`, `/**` and `/*!` all start a documentation block.
+        text = re.sub(r"^/\*[*!]?", "", text)
         if text.endswith("*/"):
             text = text[:-2]
         lines = [re.sub(r"^\s*\*\s?", "", ln) for ln in text.splitlines()]
     else:
-        lines = [re.sub(r"^\s*//+\s?", "", ln) for ln in text.splitlines()]
+        # `//`, `///`, `//!` and `///<` all start a documentation line.
+        lines = [re.sub(r"^\s*//+[!<]*\s?", "", ln) for ln in text.splitlines()]
     return textwrap.dedent("\n".join(lines)).strip("\n").rstrip()
 
 
@@ -256,14 +258,22 @@ def _kind(sym) -> str:
 
 
 def _direct_instances(body) -> list:
-    """The child instances of a module. Includes the generate blocks."""
+    """The child instances of a module, with the name of each one.
+
+    Includes the generate blocks and the arrays. An element of an array has no
+    name of its own, thus the array gives the name to each element.
+    """
     found: list = []
 
-    def walk(scope):
+    def walk(scope, name=""):
         for m in scope:
             k = _kind(m)
             if k == "InstanceSymbol":
-                found.append(m)
+                found.append((m, name or m.name))
+            elif k == "InstanceArraySymbol":
+                # `hci_core_intf virt_tcdm [1:0] (...)` declares an array. Without
+                # this, an interface array and a module array are not in the model.
+                walk(m, name or getattr(m, "name", ""))
             elif k in (
                 "GenerateBlockSymbol",
                 "GenerateBlockArraySymbol",
@@ -354,7 +364,7 @@ def _net_text(expr, sm) -> str:
     return ""
 
 
-def _instance_from_symbol(inst, sm) -> Instance:
+def _instance_from_symbol(inst, sm, name: str = "") -> Instance:
     body = inst.body
     defn = getattr(body, "definition", None)
     module = defn.name if defn is not None else getattr(body, "name", "?")
@@ -370,7 +380,7 @@ def _instance_from_symbol(inst, sm) -> Instance:
         net, modport, is_if = _conn_info(pc, sm)
         conns.append(PortConn(port=pname, net=net, is_interface=is_if, modport=modport))
     return Instance(
-        name=inst.name, module=module, params=params, conns=conns,
+        name=name or inst.name, module=module, params=params, conns=conns,
         is_interface=is_iface,
     )
 
@@ -431,7 +441,7 @@ def _module_from_body(body, sm) -> Module:
             pname = getattr(pkg, "name", "") if pkg is not None else ""
             if pname and pname not in mod.imports:
                 mod.imports.append(pname)
-    raw = [_instance_from_symbol(i, sm) for i in _direct_instances(body)]
+    raw = [_instance_from_symbol(i, sm, name) for i, name in _direct_instances(body)]
     mod.instances = _collapse_instances(raw)
     return mod
 

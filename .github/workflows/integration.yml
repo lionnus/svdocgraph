@@ -114,7 +114,7 @@ jobs:
 
       - name: Check the generated site
         run: |
-          python3 scripts/check_site.py site \
+          svdocgraph check site \
             --require-graphs --max-diagnostics 0 ${{ matrix.checks }}
 
       - name: Report what was extracted

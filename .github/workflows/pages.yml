@@ -77,7 +77,7 @@ jobs:
 
       - name: Check the example
         run: |
-          python3 scripts/check_site.py site \
+          svdocgraph check site \
             --require-graphs --require-file-graph --max-diagnostics 0 \
             --min-modules 18 --min-interfaces 3 --min-docs 1 --min-sources 8 \
             --want-interface hci_core_intf --want-module datamover_top
