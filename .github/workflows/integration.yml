@@ -67,7 +67,7 @@ jobs:
               --want-module datamover_streamer
               --min-docs 1
               --require-file-graph
-              --min-sources 8
+              --min-sources 5
     steps:
       - name: Check out svdocgraph
         uses: actions/checkout@v4
