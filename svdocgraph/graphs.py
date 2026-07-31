@@ -10,6 +10,7 @@ Bender packages.
 from __future__ import annotations
 
 import html
+import os
 import re
 import shutil
 import subprocess
@@ -275,5 +276,63 @@ def package_dot(design: Design) -> str:
         for dep in pkg.deps:
             if dep in design.packages:
                 lines.append(_edge(name, dep))
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def file_dot(design: Design, max_nodes: int = 120) -> str:
+    """A graph of the source files of the root package and their connections.
+
+    An edge goes from a file to each file that it needs: the file of a module
+    that it instantiates, and the file of a package that it imports. This gives
+    the compile sequence and the structure of the repository.
+    """
+    file_of: dict[str, str] = {}
+    for name, mod in design.modules.items():
+        if mod.rel_file:
+            file_of[name] = mod.rel_file
+
+    owned = {
+        mod.rel_file for mod in design.modules.values()
+        if mod.rel_file and mod.package == design.root_package
+    }
+    if not owned:
+        return ""
+
+    edges: set = set()
+    labels: dict = {}
+    for mod in design.modules.values():
+        src = mod.rel_file
+        if src not in owned:
+            continue
+        for inst in mod.module_instances:
+            dst = file_of.get(inst.module)
+            if dst and dst != src:
+                edges.add((src, dst))
+        for inst in mod.interface_instances:
+            dst = file_of.get(inst.module)
+            if dst and dst != src:
+                edges.add((src, dst))
+    for f in owned:
+        labels[f] = os.path.basename(f)
+    for _, dst in edges:
+        labels.setdefault(dst, os.path.basename(dst))
+
+    keep = sorted(labels)[:max_nodes]
+    kept = set(keep)
+
+    lines = [_header("LR")]
+    for f in keep:
+        is_owned = f in owned
+        fill = C_OWNED if is_owned else C_DEP
+        txt = "white" if is_owned else C_DEP_TXT
+        lines.append(
+            f'  "{f}" [label="{html.escape(labels[f])}", '
+            f'tooltip="{html.escape(f)}", shape=box, '
+            f'fillcolor="{fill}", fontcolor="{txt}", fontname="{FONT_MONO}", fontsize=10];'
+        )
+    for a, b in sorted(edges):
+        if a in kept and b in kept:
+            lines.append(_edge(a, b))
     lines.append("}")
     return "\n".join(lines)

@@ -34,6 +34,10 @@ def main(argv=None) -> int:
                     help="the maximum number of diagnostics")
     ap.add_argument("--require-graphs", action="store_true",
                     help="the hierarchy page must contain an SVG")
+    ap.add_argument("--min-docs", type=int, default=0,
+                    help="the least number of written documentation pages")
+    ap.add_argument("--require-file-graph", action="store_true",
+                    help="the site must contain the graph of the source files")
     args = ap.parse_args(argv)
 
     site: Path = args.site
@@ -106,6 +110,17 @@ def main(argv=None) -> int:
         if hier.is_file() and "<svg" not in hier.read_text():
             problems.append("hierarchy.html contains no inline SVG (is Graphviz installed?)")
 
+    doc_pages = sorted(site.glob("doc-*.html"))
+    if len(doc_pages) < args.min_docs:
+        problems.append(f"only {len(doc_pages)} written pages, expected >= {args.min_docs}")
+
+    if args.require_file_graph:
+        files_page = site / "files.html"
+        if not files_page.is_file():
+            problems.append("no files.html")
+        elif "<svg" not in files_page.read_text():
+            problems.append("files.html contains no inline SVG")
+
     if problems:
         print(f"FAIL {site}", file=sys.stderr)
         for p in problems:
@@ -114,7 +129,8 @@ def main(argv=None) -> int:
 
     print(f"OK {site}: {len(modules)} units, "
           f"{sum(1 for m in modules.values() if m.get('kind') == 'interface')} interfaces, "
-          f"{len(list(site.glob('module-*.html')))} pages")
+          f"{len(list(site.glob('module-*.html')))} pages, "
+          f"{len(doc_pages)} written pages")
     return 0
 
 

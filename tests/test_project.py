@@ -138,3 +138,17 @@ def test_index_url_points_at_the_entry_page(tmp_path):
     url = project.index_url(str(tmp_path))
     assert url.startswith("file://")
     assert url.endswith("index.html")
+
+
+def test_the_settings_give_more_documentation_directories(project_dir):
+    (project_dir / "svdocgraph.yml").write_text("docs: [manual, spec]\n")
+    cfg = project.load_config(str(project_dir))
+    assert cfg.doc_dirs == ["manual", "spec"]
+    assert cfg.docs_enabled
+
+
+def test_the_settings_can_stop_the_documentation(project_dir):
+    (project_dir / "svdocgraph.yml").write_text("docs: false\n")
+    cfg = project.load_config(str(project_dir))
+    assert not cfg.docs_enabled
+    assert cfg.doc_dirs == []

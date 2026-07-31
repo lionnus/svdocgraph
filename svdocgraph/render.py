@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from . import __version__, graphs, project
+from . import __version__, docs, graphs, project
 from .model import Design, Module
 from .model import reset_polarity as model_reset_polarity
 
@@ -40,10 +40,16 @@ def _json_for_script(payload) -> str:
 
 
 class Renderer:
-    def __init__(self, design: Design, outdir: str, title: str = ""):
+    def __init__(self, design: Design, outdir: str, title: str = "",
+                 doc_dirs: list | None = None, with_docs: bool = True):
         self.design = design
         self.outdir = outdir
+        self.doc_dirs = list(doc_dirs or [])
+        self.with_docs = with_docs
         self._search_json = "{}"   # replaced in _write_search_index, before any page
+        self._doc_media: dict = {}
+        self._file_dot = ""
+        self._has_file_graph = False
         self.env = Environment(
             loader=FileSystemLoader(_TEMPLATES),
             autoescape=select_autoescape(["html"]),
@@ -81,6 +87,8 @@ class Renderer:
     def _ctx(self, **kw):
         base = {
             "nav": self._nav(),
+            "doc_nav": docs.order_pages(self.design.doc_pages),
+            "has_files": self._has_file_graph,
             "design": self.design,
             # The index is in each page. Thus the search operates when the user
             # opens the page from the disk. A `file://` page cannot read a file.
@@ -94,6 +102,11 @@ class Renderer:
         os.makedirs(self.outdir, exist_ok=True)
         self._clean()
         self._copy_assets()
+        # The written pages and the file graph must exist before any page, because
+        # each page shows them in the side bar.
+        self._load_docs()
+        self._file_dot = graphs.file_dot(self.design)
+        self._has_file_graph = bool(self._file_dot)
         self._write_search_index()
         self._render_index()
         self._render_hierarchy()
@@ -102,7 +115,35 @@ class Renderer:
             self._render_module(name)
         for name in self.design.packages:
             self._render_package(name)
+        if self._has_file_graph:
+            self._render_files()
+        for slug in self.design.doc_pages:
+            self._render_doc(slug)
+        docs.copy_media(self._doc_media, self.outdir)
         self._write_build_info()
+
+    @property
+    def _xref_targets(self) -> dict:
+        """The address of each unit, for a link in the text."""
+        targets = {n: f"module-{n}.html" for n in self.design.modules}
+        targets.update({n: f"package-{n}.html" for n in self.design.packages})
+        return targets
+
+    def _load_docs(self) -> None:
+        """Reads the Markdown files of the repository and makes HTML from them."""
+        if not self.with_docs or not docs.HAVE_MARKDOWN or not self.design.project_root:
+            return
+        rel_paths = docs.find_files(self.design.project_root, self.doc_dirs)
+        pages, media = docs.build_pages(self.design.project_root, rel_paths)
+        docs.attach_to_modules(pages, self.design.modules)
+        # A link to a unit makes the text navigable.
+        targets = self._xref_targets
+        for page in pages.values():
+            page.html = docs.link_names(page.html, targets)
+            if page.module:
+                self.design.modules[page.module].doc_page = page.slug
+        self.design.doc_pages = pages
+        self._doc_media = media
 
     def _clean(self) -> None:
         """Removes the pages of the last run. Thus no old page stays.
@@ -116,7 +157,8 @@ class Renderer:
                 fn in keep
                 or fn == project.BUILD_INFO
                 or fn in ("design.json", "model.json")
-                or (fn.startswith(("module-", "package-")) and fn.endswith(".html"))
+                or fn in ("files.html",)
+                or (fn.startswith(("module-", "package-", "doc-")) and fn.endswith(".html"))
             )
             if ours:
                 os.remove(os.path.join(self.outdir, fn))
@@ -158,6 +200,11 @@ class Renderer:
             "packages": [
                 {"name": p.name, "url": f"package-{p.name}.html", "root": p.root}
                 for p in self.design.packages.values()
+            ],
+            "docs": [
+                {"name": d.title, "url": f"{d.slug}.html", "path": d.rel_path,
+                 "text": d.text[:600]}
+                for d in self.design.doc_pages.values()
             ],
         }
         self._search_json = _json_for_script(payload)
@@ -201,15 +248,46 @@ class Renderer:
 
     def _render_module(self, name: str) -> None:
         mod = self.design.modules[name]
+        # The comment above the declaration is Markdown or reStructuredText.
+        comment_html = docs.link_names(docs.render_comment(mod.doc_comment),
+                                       self._xref_targets) if mod.doc_comment else ""
         dot = graphs.internal_dot(self.design, name)
         svg = _responsive(graphs.render_dot(dot)) if dot else None
         ports = {"in": [], "out": [], "inout": []}
         for p in mod.ports:
             ports.get(p.eff_dir, ports["inout"]).append(p)
         html = self.env.get_template("module.html").render(
-            **self._ctx(mod=mod, ports=ports, internal_svg=svg, active="module")
+            **self._ctx(mod=mod, ports=ports, internal_svg=svg,
+                        comment_html=comment_html, active="module")
         )
         self._write(f"module-{name}.html", html)
+
+    def _render_files(self) -> None:
+        """The graph of the source files and their connections."""
+        files = sorted(
+            {m.rel_file: m for m in self.design.modules.values() if m.rel_file}.items()
+        )
+        rows = []
+        for rel, _ in files:
+            units = sorted(
+                m.name for m in self.design.modules.values() if m.rel_file == rel
+            )
+            pkg = next(
+                (m.package for m in self.design.modules.values() if m.rel_file == rel), ""
+            )
+            rows.append({"path": rel, "units": units, "package": pkg})
+        html = self.env.get_template("files.html").render(
+            **self._ctx(file_svg=_responsive(graphs.render_dot(self._file_dot)),
+                        rows=rows, active="files")
+        )
+        self._write("files.html", html)
+
+    def _render_doc(self, slug: str) -> None:
+        page = self.design.doc_pages[slug]
+        html = self.env.get_template("doc.html").render(
+            **self._ctx(page=page, active="doc")
+        )
+        self._write(f"{slug}.html", html)
 
     def _render_package(self, name: str) -> None:
         pkg = self.design.packages[name]
@@ -229,7 +307,9 @@ def _dirbadge(direction: str) -> str:
     }.get(direction, direction)
 
 
-def render_site(design: Design, outdir: str, title: str = "") -> None:
+def render_site(design: Design, outdir: str, title: str = "",
+                doc_dirs: list | None = None, with_docs: bool = True) -> None:
     design.generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     design.tool_version = __version__
-    Renderer(design, outdir, title=title).build()
+    Renderer(design, outdir, title=title, doc_dirs=doc_dirs,
+             with_docs=with_docs).build()

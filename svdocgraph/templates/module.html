@@ -11,12 +11,13 @@
   <div>
     <div class="eyebrow">{{ mod.kind }}{% if not mod.elaborated %} · source-only{% endif %}</div>
     <h1 class="mono">{{ mod.name }}</h1>
-    {% if mod.desc %}<p class="lede">{{ mod.desc }}</p>{% endif %}
+    {% if mod.desc and not comment_html %}<p class="lede">{{ mod.desc }}</p>{% endif %}
     <div class="meta-row">
       {% if mod.name in design.tops %}<span class="pill pill-top">top</span>{% endif %}
       {% if mod.package %}<a class="pill pill-pkg" href="package-{{ mod.package }}.html">{{ mod.package }}</a>{% endif %}
       {% if mod.rel_file %}<span class="pill pill-file mono">{{ mod.rel_file }}{% if mod.line %}:{{ mod.line }}{% endif %}</span>{% endif %}
       {% if mod.elaborated %}<span class="pill pill-ok" title="Ports and widths resolved by slang elaboration">elaborated</span>{% endif %}
+      {% if mod.doc_page %}<a class="pill pill-doc" href="{{ mod.doc_page }}.html">documentation</a>{% endif %}
     </div>
   </div>
   <div class="port-summary">
@@ -25,6 +26,15 @@
     <div><span class="big">{{ mod.module_instances|length }}</span><span>sub</span></div>
   </div>
 </div>
+
+{% if comment_html %}
+<section class="card prose module-doc">
+  {{ comment_html|safe }}
+  {% if mod.doc_page %}
+  <p class="muted">More: <a href="{{ mod.doc_page }}.html">the written page for this module</a>.</p>
+  {% endif %}
+</section>
+{% endif %}
 
 {% if internal_svg %}
 <section class="card">

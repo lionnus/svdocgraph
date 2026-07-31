@@ -33,7 +33,7 @@
   // ---- command palette ----
   // The index is inlined in every page so search works when the site is opened
   // straight from disk (file:// pages are not allowed to fetch design.json).
-  let DATA = { modules: [], packages: [] };
+  let DATA = { modules: [], packages: [], docs: [] };
   const inline = document.getElementById("svdg-data");
   if (inline) {
     try {
@@ -73,14 +73,22 @@
       const s = q ? score({ name: p.name }, q) : -1;
       if (s >= 0) items.push({ name: p.name, url: p.url, _s: s, _type: "package" });
     }
+    // The written pages match on the title, the path and the body text.
+    for (const d of DATA.docs || []) {
+      if (!q) continue;
+      let s = score({ name: d.name }, q);
+      if (s < 0 && (d.path || "").toLowerCase().includes(q)) s = 55;
+      if (s < 0 && (d.text || "").toLowerCase().includes(q)) s = 40;
+      if (s >= 0) items.push({ name: d.name, url: d.url, package: d.path, _s: s, _type: "doc" });
+    }
     items.sort((a, b) => b._s - a._s || a.name.localeCompare(b.name));
     results = items.slice(0, 40);
     sel = 0;
     pres.innerHTML = results.map((r, i) =>
       `<li class="${i === 0 ? "sel" : ""}" data-url="${r.url}">
-         <span class="r-kind">${r._type === "package" ? "pkg" : (r.owned ? "mod" : "ext")}</span>
+         <span class="r-kind">${r._type === "doc" ? "doc" : (r._type === "package" ? "pkg" : (r.owned ? "mod" : "ext"))}</span>
          <span class="r-name">${r.name}</span>
-         <span class="r-meta">${r._type === "module" ? (r.ni + "->" + r.no) : (r.package || "")}</span>
+         <span class="r-meta">${r._type === "module" ? (r.ni + "-&gt;" + r.no) : (r.package || "")}</span>
        </li>`).join("");
     Array.from(pres.children).forEach((li, i) => {
       li.addEventListener("click", () => go(i));

@@ -116,10 +116,12 @@ class Module:
     rel_file: str = ""         # The path from the project root
     package: str = ""          # The Bender package that owns the file
     line: int = 0
-    desc: str = ""             # The comment above the declaration
+    desc: str = ""             # The first sentence of the comment
+    doc_comment: str = ""      # The full comment above the declaration
     elaborated: bool = False   # True if slang resolved the ports and the types
     # Filled after the extraction
     instantiated_by: list[str] = field(default_factory=list)
+    doc_page: str = ""         # The written page that documents this module
 
     @property
     def n_inputs(self) -> int:
@@ -149,6 +151,19 @@ class Module:
 
 
 @dataclass
+class DocPage:
+    """One page of written documentation from the repository."""
+
+    slug: str
+    title: str
+    rel_path: str              # The path from the project root
+    html: str = ""
+    module: str = ""           # The module that this page documents
+    headings: list = field(default_factory=list)
+    text: str = ""
+
+
+@dataclass
 class BenderPackage:
     """A package from Bender.yml and Bender.lock."""
 
@@ -169,6 +184,7 @@ class Design:
     modules: dict[str, Module] = field(default_factory=dict)
     packages: dict[str, BenderPackage] = field(default_factory=dict)
     tops: list[str] = field(default_factory=list)          # The design tops
+    doc_pages: dict[str, DocPage] = field(default_factory=dict)
     generated_at: str = ""
     tool_version: str = ""
     diagnostics: list[str] = field(default_factory=list)   # Warnings

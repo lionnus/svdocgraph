@@ -134,7 +134,9 @@ def _generate(ctx: Ctx, force: bool) -> int:
         return 1
 
     _log(f"Pages → {ctx.rel_out}")
-    render_site(design, ctx.outdir, title=ctx.config.name)
+    render_site(design, ctx.outdir, title=ctx.config.name,
+                doc_dirs=ctx.config.doc_dirs if ctx.config.docs_enabled else None,
+                with_docs=ctx.config.docs_enabled)
 
     if ctx.is_default_output:
         touched = project.ensure_gitignored(ctx.outdir)

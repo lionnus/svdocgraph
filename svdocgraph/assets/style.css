@@ -217,3 +217,49 @@ th.num, td.num { text-align:right; font-variant-numeric:tabular-nums; }
   .stat-grid { grid-template-columns:repeat(2,1fr); } .card.cols { grid-template-columns:1fr; }
   .page-head { flex-direction:column; } .topnav { display:none; }
 }
+
+/* ---- Written documentation -------------------------------------------- */
+.doc-layout { display: grid; grid-template-columns: 1fr; gap: 18px; }
+@media (min-width: 1200px) {
+  .doc-layout { grid-template-columns: 1fr 210px; }
+  .doc-layout .doc-toc { order: 2; }
+  .doc-layout .prose { order: 1; }
+}
+.doc-toc { position: sticky; top: 84px; align-self: start; font-size: 12.5px; }
+.doc-toc-title { text-transform: uppercase; letter-spacing: .06em; font-size: 10.5px;
+  color: var(--muted); margin-bottom: 8px; }
+.doc-toc ul { list-style: none; margin: 0; padding: 0; }
+.doc-toc li { margin: 3px 0; }
+.doc-toc a { color: var(--muted); text-decoration: none; }
+.doc-toc a:hover { color: var(--accent); }
+.doc-toc .toc-l3 { padding-left: 12px; font-size: 12px; }
+
+.prose { line-height: 1.65; }
+.prose > :first-child { margin-top: 0; }
+.prose h1 { font-size: 22px; margin: 26px 0 10px; }
+.prose h2 { font-size: 18px; margin: 26px 0 10px; padding-top: 10px;
+  border-top: 1px solid var(--bg-4); }
+.prose h3 { font-size: 15px; margin: 20px 0 8px; }
+.prose p, .prose ul, .prose ol { margin: 10px 0; }
+.prose li { margin: 4px 0; }
+.prose code { background: var(--bg-2); border-radius: 4px; padding: 1px 5px;
+  font-family: var(--mono); font-size: 12.5px; }
+.prose pre { background: var(--bg-2); border: 1px solid var(--bg-4); border-radius: 8px;
+  padding: 12px 14px; overflow-x: auto; }
+.prose pre code { background: none; padding: 0; }
+.prose blockquote { margin: 12px 0; padding: 2px 14px; border-left: 3px solid var(--bg-4);
+  color: var(--muted); }
+.prose img { max-width: 100%; height: auto; border-radius: 8px; }
+.prose table { border-collapse: collapse; margin: 14px 0; display: block; overflow-x: auto; }
+.prose th, .prose td { border: 1px solid var(--bg-4); padding: 6px 10px; text-align: left;
+  font-size: 13px; }
+.prose th { background: var(--bg-2); }
+.prose hr { border: 0; border-top: 1px solid var(--bg-4); margin: 22px 0; }
+.prose a.xref code { color: var(--accent); }
+.nav-docs .nav-group-title { color: var(--accent); }
+.ico-doc { background: var(--accent); color: #fff; }
+.pill-doc { background: var(--accent); color: #fff; }
+/* The documentation comment of a module. */
+.module-doc { font-size: 14px; }
+.module-doc > :first-child { margin-top: 0; }
+.module-doc > :last-child { margin-bottom: 0; }

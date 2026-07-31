@@ -1,0 +1,96 @@
+name: pages
+
+# Publishes the example site to GitHub Pages.
+#
+# The example is pulp-platform/axi, because it has both parts that this tool
+# joins: SystemVerilog interfaces, and a doc/ directory with a written page for
+# each of the large modules.
+#
+# The repository settings must give "GitHub Actions" as the source of Pages.
+
+on:
+  push:
+    branches: [master, main]
+  schedule:
+    - cron: "30 5 * * 1"     # Mondays, after the integration run
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time. A running deployment is not stopped.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  BENDER_VERSION: 0.28.1
+  DEMO_REPO: pulp-platform/axi
+  DEMO_REF: v0.39.10
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out svdocgraph
+        uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Graphviz
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends graphviz
+
+      - name: Install bender
+        run: |
+          url="https://github.com/pulp-platform/bender/releases/download/v${BENDER_VERSION}"
+          url="${url}/bender-${BENDER_VERSION}-x86_64-linux-gnu-ubuntu22.04.tar.gz"
+          curl -fsSL "$url" -o /tmp/bender.tar.gz
+          sudo tar xzf /tmp/bender.tar.gz -C /usr/local/bin bender
+
+      - name: Install svdocgraph from the wheel
+        run: |
+          uv build
+          uv tool install --force dist/*.whl
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Check out ${{ env.DEMO_REPO }} @ ${{ env.DEMO_REF }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.DEMO_REPO }}
+          ref: ${{ env.DEMO_REF }}
+          path: design
+
+      - name: Resolve dependencies with bender
+        working-directory: design
+        run: bender checkout
+
+      - name: Generate the example
+        working-directory: design
+        run: |
+          printf 'name: "axi %s - SVDocGraph example"\n' "${DEMO_REF}" > svdocgraph.yml
+          svdocgraph gen -o "$GITHUB_WORKSPACE/site"
+
+      - name: Check the example
+        run: |
+          python3 scripts/check_site.py site \
+            --require-graphs --require-file-graph --max-diagnostics 0 \
+            --min-modules 120 --min-interfaces 5 --min-docs 5 \
+            --want-interface AXI_BUS --want-module axi_xbar
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -20,11 +20,14 @@
   </a>
   <div class="topbar-actions">
     <button id="search-open" class="searchbtn" title="Search (press /)">
-      <span>Search modules…</span><kbd>/</kbd>
+      <span>Search…</span><kbd>/</kbd>
     </button>
     <nav class="topnav">
       <a href="index.html" class="{{ 'active' if active=='index' }}">Overview</a>
       <a href="hierarchy.html" class="{{ 'active' if active=='hierarchy' }}">Hierarchy</a>
+      {% if has_files %}
+      <a href="files.html" class="{{ 'active' if active=='files' }}">Files</a>
+      {% endif %}
       <a href="packages.html" class="{{ 'active' if active in ('packages','package') }}">Packages</a>
     </nav>
     <button id="theme-toggle" class="iconbtn" title="Toggle theme" aria-label="Toggle theme">◐</button>
@@ -35,6 +38,22 @@
   <aside class="sidebar">
     <input id="nav-filter" class="nav-filter" type="text" placeholder="Filter…" autocomplete="off">
     <nav class="nav">
+      {% if doc_nav %}
+      <div class="nav-group nav-docs" data-pkg="(documentation)">
+        <div class="nav-group-title">Documentation<span class="nav-count">{{ doc_nav|length }}</span></div>
+        <ul>
+          {% for d in doc_nav %}
+          <li>
+            <a class="nav-item{{ ' is-active' if (page is defined and page.slug == d.slug) }}"
+               href="{{ d.slug }}.html" data-name="{{ d.title }} {{ d.rel_path }}">
+              <span class="nav-ico ico-doc">D</span>
+              <span class="nav-label">{{ d.title }}</span>
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
       {% for group in nav %}
       <div class="nav-group{{ ' nav-root' if group.is_root }}" data-pkg="{{ group.package }}">
         <div class="nav-group-title">
@@ -71,7 +90,7 @@
 
 <div id="palette" class="palette" hidden>
   <div class="palette-box">
-    <input id="palette-input" type="text" placeholder="Search modules, ports, packages…" autocomplete="off">
+    <input id="palette-input" type="text" placeholder="Search modules, ports, packages, documentation…" autocomplete="off">
     <ul id="palette-results"></ul>
     <div class="palette-hint"><kbd>↑</kbd><kbd>↓</kbd> navigate · <kbd>↵</kbd> open · <kbd>esc</kbd> close</div>
   </div>

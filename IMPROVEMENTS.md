@@ -86,9 +86,53 @@ directory to Pages.
 - A project in a directory with a space in its name now works: slang divides a
   command file at each space, so each entry gets quotation marks.
 
+### The comment above a module
+
+- `driver.syntaxTrees` gives the parsed files that the elaboration already made.
+  Thus the tool reads the comments from the parser, and not with a regular
+  expression: a `/** */` block, a `//` block, and a comment before an `import`
+  each work.
+- slang attaches a comment to the token that follows it. A PULP file has the
+  licence block, then the documentation block, then often an import, then the
+  module. The extractor collects the blocks of each member and gives the last
+  one to the next module. A block that gives the licence is left out.
+- A comment with a directive or a role is reStructuredText; the other comments
+  are Markdown. On pulp-platform/hwpe-stream, 33 of the 41 modules give a
+  comment, and `hwpe_stream_source` gives 5.7 kB of reStructuredText.
+- A name of a module in the comment becomes a link. The PULP comments write the
+  name in bold, Markdown writes it in backticks; both work.
+
+### Written documentation
+
+- The tool reads `README.md`, and the Markdown and reStructuredText files in
+  `doc/`, `docs/` and `documentation/`. It writes them as pages of the same site.
+- `.readthedocs.yaml` gives one more directory. `configuration: conf.py` means the
+  root of the repository, and then only the files directly in the root are read.
+- docutils reads the reStructuredText. It cannot run a Sphinx extension: a
+  `wavedrom`, `svprettyplot` or `toctree` directive gives no output, and a `raw`
+  directive is stopped for the same reason as the HTML in a Markdown file.
+  Verified against the 8 pages of pulp-platform/hwpe-doc: each one renders, with
+  no error block in the output.
+- A page with the name of a module attaches to that module. `axi/doc/axi_xbar.md`
+  and the module `axi_xbar` link to each other. On pulp-platform/axi, 7 of the 9
+  pages attach in this way.
+- In the text, a `code` element with the name of a module or a package becomes a
+  link. The images are copied into the site. The links between the pages point at
+  the new names.
+- The HTML in a Markdown file is escaped, not written into the page.
+- The file graph shows each source file and the files that it needs.
+
 ## Known limitations
 
 - Clock and reset nets are detected by name pattern, not by tracing clock trees.
+- A Sphinx extension does not run, so the output of `wavedrom`, `svprettyplot` and
+  a similar directive is not in the page. A `:ref:` or `:numref:` role gives plain
+  text, not a link.
+- The `nav` of an `mkdocs.yml`, and the `toctree` of an `index.rst`, are not read.
+  The pages are in the sequence of their paths, with the README first.
+- `pulp-platform/hwpe-doc` is a repository of documentation only. It has no
+  `Bender.yml`, thus this tool cannot run in it. The RTL of `hwpe-stream` and the
+  text of `hwpe-doc` are in two repositories.
 - Only modules reachable as a top of the root package (or reachable from one) are
   elaborated; dependency modules that are never instantiated appear as black boxes.
 - Connection grouping uses the base signal name, so a bit-select and the full
@@ -133,6 +177,8 @@ effort, good payoff for parameterised or conditionally-built modules.
 - Package pages with package contents: typedefs and parameters declared in a
   SystemVerilog package, not only the modules that belong to it.
 - Incremental builds and parallel graph rendering for very large designs.
+- Read the `nav` of `mkdocs.yml` and the `toctree` of `index.rst`, to give the
+  pages the sequence that the author chose.
 - Single-file output (`svdocgraph gen --single-file`) producing one self-contained
   `svdocgraph.html`, for attaching a design map to a review or an email. The site is
   already offline-capable; this would fold the per-module pages into one document

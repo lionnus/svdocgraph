@@ -50,6 +50,8 @@ class Config:
     output: str = DEFAULT_OUTPUT
     tops: list[str] = field(default_factory=list)
     name: str = ""          # The title. The default is the directory name
+    doc_dirs: list = field(default_factory=list)   # More directories with Markdown
+    docs_enabled: bool = True                      # `docs: false` stops the search
     path: str = ""          # The settings file. Empty if there is none
 
     @property
@@ -76,10 +78,18 @@ def load_config(project_root: str) -> Config:
         tops = data.get("tops") or data.get("top") or []
         if isinstance(tops, str):
             tops = [tops]
+        # `docs` gives more directories with Markdown, or `false` to use none.
+        raw_docs = data.get("docs", None)
+        enabled = raw_docs is not False
+        if isinstance(raw_docs, str):
+            raw_docs = [raw_docs]
+        doc_dirs = [str(d) for d in raw_docs] if isinstance(raw_docs, list) else []
         return Config(
             output=str(data.get("output") or DEFAULT_OUTPUT),
             tops=[str(t) for t in tops],
             name=str(data.get("name") or ""),
+            doc_dirs=doc_dirs,
+            docs_enabled=enabled,
             path=path,
         )
     return Config()

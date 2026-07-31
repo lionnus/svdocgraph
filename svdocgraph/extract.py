@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import os
 import re
+import textwrap
 
 from .bender import BenderInfo
 from .model import Design, Instance, Module, Param, Port, PortConn
@@ -59,32 +60,110 @@ def declared_units(files: list[str]) -> dict[str, tuple[str, str]]:
     return out
 
 
-def _header_doc(file: str, name: str) -> str:
-    """Reads the `//` comment lines immediately above the module declaration."""
-    try:
-        with open(file, errors="replace") as fh:
-            lines = fh.readlines()
-    except OSError:
-        return ""
-    decl = re.compile(r"^\s*(?:module|interface)\s+" + re.escape(name) + r"\b")
-    idx = next((i for i, ln in enumerate(lines) if decl.match(ln)), None)
-    if idx is None:
-        return ""
-    doc: list[str] = []
-    j = idx - 1
-    while j >= 0:
-        s = lines[j].strip()
-        if s.startswith("//"):
-            body = s[2:].strip()
-            # Do not use the licence lines.
-            if body and not re.match(r"(copyright|spdx|licen|http|---)", body, re.I):
-                doc.append(body)
-            j -= 1
-        elif s == "":
-            break
-        else:
-            break
-    return " ".join(reversed(doc))[:300]
+_LICENCE = re.compile(r"(copyright|spdx|licen[cs]e|https?:|www\.)", re.I)
+
+
+def _clean_comment(raw: str) -> str:
+    """The text of a comment, without the markers of the comment.
+
+    `textwrap.dedent` removes only the indentation that each line shares. Thus
+    the deeper indentation stays, which reStructuredText needs for the body of a
+    directive.
+    """
+    text = raw.strip()
+    if text.startswith("/*"):
+        text = text[3:] if text.startswith("/**") else text[2:]
+        if text.endswith("*/"):
+            text = text[:-2]
+        lines = [re.sub(r"^\s*\*\s?", "", ln) for ln in text.splitlines()]
+    else:
+        lines = [re.sub(r"^\s*//+\s?", "", ln) for ln in text.splitlines()]
+    return textwrap.dedent("\n".join(lines)).strip("\n").rstrip()
+
+
+def _comment_blocks(trivia) -> list:
+    """The comment blocks before a token, in sequence.
+
+    Line comments that follow each other are one block. An empty line between
+    them starts a new block.
+    """
+    blocks: list = []
+    run: list = []          # The line comments that follow each other
+    gap = 0                 # The end-of-line trivia after the last comment
+
+    def flush():
+        if run:
+            blocks.append("\n".join(run))
+            run.clear()
+
+    for triv in trivia:
+        kind = str(triv.kind)
+        if "LineComment" in kind:
+            if gap > 1:
+                flush()
+            run.append(str(triv.getRawText()))
+            gap = 0
+        elif "BlockComment" in kind:
+            flush()
+            blocks.append(str(triv.getRawText()))
+            gap = 0
+        elif "EndOfLine" in kind:
+            gap += 1
+    flush()
+    return blocks
+
+
+def _is_licence(text: str) -> bool:
+    """True if the comment gives the licence, not the function of the module."""
+    head = "\n".join(text.splitlines()[:6])
+    return bool(_LICENCE.search(head)) and len(_LICENCE.findall(head)) >= 2
+
+
+def _summary(text: str) -> str:
+    """The first sentence of a comment, for a list or a card."""
+    plain = " ".join(
+        ln for ln in text.splitlines()
+        if ln.strip() and not ln.lstrip().startswith((".. ", ":", "|", "+--", "==="))
+    )
+    # Remove the emphasis marks, but not the underscore: it is in each name.
+    plain = re.sub(r"[*`]+", "", plain).strip()
+    m = re.search(r"^(.{20,200}?[.!?])\s", plain + " ")
+    return (m.group(1) if m else plain)[:300].strip()
+
+
+def doc_comments(trees) -> dict:
+    """The documentation comment of each unit, from the parsed files.
+
+    slang attaches a comment to the token that comes after it. A file often has
+    a licence comment, then the documentation comment, then an import, then the
+    module. Thus this function collects the comments of each member and gives
+    the last one to the next module.
+    """
+    out: dict = {}
+    for tree in trees:
+        root = tree.root
+        # A file gives a compilation unit. A single declaration gives that
+        # declaration, and then `members` holds the body of the module.
+        members = (root.members if type(root).__name__ == "CompilationUnitSyntax"
+                   else [root])
+        pending: list = []
+        for member in members:
+            try:
+                first = member.getFirstToken()
+            except Exception:
+                continue
+            for block in _comment_blocks(first.trivia):
+                text = _clean_comment(block)
+                if text and not _is_licence(text):
+                    pending.append(text)
+            header = getattr(member, "header", None)
+            name_tok = getattr(header, "name", None) if header is not None else None
+            name = getattr(name_tok, "valueText", "") if name_tok is not None else ""
+            if name:
+                if pending:
+                    out.setdefault(name, pending[-1])
+                pending = []
+    return out
 
 
 # --- Functions that read the elaborated tree --------------------------------
@@ -353,11 +432,11 @@ def extract_design(
                 desc="(not elaborated - from the source text only)",
             )
 
-    _annotate(design, bender, owned)
+    _annotate(design, bender, owned, doc_comments(driver.syntaxTrees))
     return design
 
 
-def _annotate(design: Design, bender: BenderInfo, owned: dict) -> None:
+def _annotate(design: Design, bender: BenderInfo, owned: dict, comments: dict) -> None:
     """Adds the origin, the package, the comments and the parent modules."""
     design.packages = bender.packages
     for name, mod in design.modules.items():
@@ -368,11 +447,12 @@ def _annotate(design: Design, bender: BenderInfo, owned: dict) -> None:
                 mod.rel_file = os.path.relpath(mod.file, design.project_root)
         if not mod.package and name in owned:
             mod.package = bender.root_package
-        # The comment above the declaration
-        if mod.file and not mod.desc.startswith("("):
-            doc = _header_doc(mod.file, name)
-            if doc:
-                mod.desc = doc
+        # The documentation comment above the declaration
+        comment = comments.get(name, "")
+        if comment:
+            mod.doc_comment = comment
+            if not mod.desc.startswith("("):
+                mod.desc = _summary(comment)
     # reverse edges + unknown flagging (module hierarchy only, skip interfaces)
     known = set(design.modules)
     for name, mod in design.modules.items():

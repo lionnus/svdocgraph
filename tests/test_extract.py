@@ -28,30 +28,6 @@ def test_declared_units_ignores_unreadable_files():
     assert extract.declared_units(["/nonexistent/nope.sv"]) == {}
 
 
-def test_header_doc_is_taken_from_the_comment_above_the_declaration():
-    doc = extract._header_doc(_fixture("demo_adder.sv"), "demo_adder")
-    assert "Registered adder" in doc
-
-
-def test_header_doc_skips_licence_boilerplate(tmp_path):
-    f = tmp_path / "m.sv"
-    f.write_text(
-        "// Copyright 2026 ETH Zurich\n"
-        "// SPDX-License-Identifier: Apache-2.0\n"
-        "// A useful description.\n"
-        "module m ();\nendmodule\n"
-    )
-    doc = extract._header_doc(str(f), "m")
-    assert doc == "A useful description."
-
-
-def test_header_doc_is_empty_when_absent(tmp_path):
-    f = tmp_path / "m.sv"
-    f.write_text("module m ();\nendmodule\n")
-    assert extract._header_doc(str(f), "m") == ""
-    assert extract._header_doc(str(f), "other") == ""
-
-
 class _Defn:
     def __init__(self, kind):
         self.definitionKind = kind
@@ -85,16 +61,6 @@ def test_direction_strings_are_normalised():
     assert extract._dir_str("ArgumentDirection.Ref") == "ref"
 
 
-def test_header_doc_stops_at_a_blank_line(tmp_path):
-    f = tmp_path / "m.sv"
-    f.write_text("// Not part of the header.\n\n// The description.\nmodule m ();\nendmodule\n")
-    assert extract._header_doc(str(f), "m") == "The description."
-
-
-def test_header_doc_ignores_an_unreadable_file():
-    assert extract._header_doc("/nonexistent/m.sv", "m") == ""
-
-
 def test_extraction_needs_pyslang(monkeypatch):
     monkeypatch.setattr(extract, "HAVE_PYSLANG", False)
     design = extract.extract_design("/tmp", BenderInfo(), "sources.f")
@@ -117,13 +83,67 @@ def test_extraction_reports_a_command_file_slang_refuses(tmp_path):
     assert any("slang" in d for d in design.diagnostics)
 
 
-def test_header_doc_stops_at_a_line_of_code(tmp_path):
-    f = tmp_path / "m.sv"
-    f.write_text("`define X 1\n// The description.\nmodule m ();\nendmodule\n")
-    assert extract._header_doc(str(f), "m") == "The description."
+# -- the documentation comment above a module ------------------------------
 
 
-def test_a_long_doc_comment_is_shortened(tmp_path):
-    f = tmp_path / "m.sv"
-    f.write_text("// " + "word " * 200 + "\nmodule m ();\nendmodule\n")
-    assert len(extract._header_doc(str(f), "m")) <= 300
+def _tree(text: str):
+    from pyslang import syntax
+    t = syntax.SyntaxTree.fromText(text)
+    return t[0] if isinstance(t, tuple) else t
+
+
+def test_a_block_comment_above_a_module_is_the_documentation():
+    trees = [_tree("/**\n * The **adder** adds.\n * It needs one clock.\n */\n"
+                   "module m ();\nendmodule\n")]
+    assert extract.doc_comments(trees)["m"] == "The **adder** adds.\nIt needs one clock."
+
+
+def test_a_line_comment_above_a_module_is_the_documentation():
+    trees = [_tree("// The adder adds.\n// It needs one clock.\nmodule m ();\nendmodule\n")]
+    assert extract.doc_comments(trees)["m"] == "The adder adds.\nIt needs one clock."
+
+
+def test_the_licence_block_is_not_the_documentation():
+    """A PULP file starts with the licence, then the documentation."""
+    trees = [_tree(
+        "/*\n * m.sv\n * Copyright (C) 2018 ETH Zurich\n"
+        " * Licensed under the Solderpad Hardware License\n */\n\n"
+        "/**\n * The real description.\n */\n"
+        "module m ();\nendmodule\n"
+    )]
+    assert extract.doc_comments(trees)["m"] == "The real description."
+
+
+def test_a_comment_before_an_import_still_belongs_to_the_module():
+    """slang attaches a comment to the token after it. In hwpe-stream an import
+    is between the comment and the module."""
+    trees = [_tree(
+        "/**\n * The description.\n */\n"
+        "import my_pkg::*;\n"
+        "module m ();\nendmodule\n"
+    )]
+    assert extract.doc_comments(trees)["m"] == "The description."
+
+
+def test_each_module_of_a_file_keeps_its_own_comment():
+    trees = [_tree(
+        "/** First module. */\nmodule a ();\nendmodule\n"
+        "/** Second module. */\nmodule b ();\nendmodule\n"
+    )]
+    got = extract.doc_comments(trees)
+    assert got["a"] == "First module."
+    assert got["b"] == "Second module."
+
+
+def test_a_module_without_a_comment_gets_none():
+    assert extract.doc_comments([_tree("module m ();\nendmodule\n")]) == {}
+
+
+def test_the_summary_is_the_first_sentence():
+    text = "The source streamer performs loads. It also does other things.\nMore text."
+    assert extract._summary(text) == "The source streamer performs loads."
+
+
+def test_the_summary_leaves_out_a_directive():
+    text = ".. figure:: img/a.png\n\nThe module moves the data. Then it stops."
+    assert extract._summary(text).startswith("The module moves the data.")

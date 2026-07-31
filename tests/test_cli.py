@@ -392,6 +392,92 @@ def test_the_root_package_is_first_in_the_side_bar(run_cli, project_dir,
                                                    stub_bender_with_dependency):
     assert _gen(run_cli, project_dir) == 0
     html = (project_dir / project.DEFAULT_OUTPUT / "index.html").read_text()
-    order = re.findall(r'nav-group[^>]*data-pkg="([^"]+)"', html)
+    order = [g for g in re.findall(r'nav-group[^>]*data-pkg="([^"]+)"', html)
+             if g != "(documentation)"]
     assert order[0] == "demo_ip", f"the root package must come first, found {order}"
     assert "demo_dep" in order
+
+
+# -- the written documentation in the site ---------------------------------
+
+
+def test_the_written_pages_are_in_the_site(run_cli, project_dir, stub_bender):
+    assert _gen(run_cli, project_dir) == 0
+    out = project_dir / project.DEFAULT_OUTPUT
+    assert (out / "doc-readme.html").is_file()
+    assert (out / "doc-demo_adder.html").is_file()
+    assert (out / "assets" / "docmedia" / "doc" / "adder.png").is_file()
+
+
+def test_a_module_page_links_to_its_written_page(run_cli, project_dir, stub_bender):
+    """`doc/demo_adder.md` documents `demo_adder`, so the two pages join."""
+    assert _gen(run_cli, project_dir) == 0
+    out = project_dir / project.DEFAULT_OUTPUT
+    assert 'href="doc-demo_adder.html"' in (out / "module-demo_adder.html").read_text()
+    assert 'href="module-demo_adder.html"' in (out / "doc-demo_adder.html").read_text()
+    assert "pill-doc" not in (out / "module-demo_top.html").read_text()
+
+
+def test_the_written_pages_are_in_the_side_bar_and_the_search(run_cli, project_dir,
+                                                              stub_bender):
+    assert _gen(run_cli, project_dir) == 0
+    out = project_dir / project.DEFAULT_OUTPUT
+    assert "nav-docs" in (out / "index.html").read_text()
+    index = json.loads((out / "design.json").read_text())
+    titles = {d["name"] for d in index["docs"]}
+    assert {"Demo IP", "The registered adder"} <= titles
+
+
+def test_the_file_graph_is_in_the_site(run_cli, project_dir, stub_bender):
+    assert _gen(run_cli, project_dir) == 0
+    out = project_dir / project.DEFAULT_OUTPUT
+    page = (out / "files.html").read_text()
+    assert "rtl/demo_top.sv" in page
+    assert "rtl/demo_adder.sv" in page
+    assert 'href="module-demo_adder.html"' in page
+    assert 'href="files.html"' in (out / "index.html").read_text()
+
+
+def test_a_project_without_documentation_still_builds(run_cli, project_dir, stub_bender):
+    (project_dir / "README.md").unlink()
+    import shutil as _shutil
+    _shutil.rmtree(project_dir / "doc")
+    assert _gen(run_cli, project_dir) == 0
+    out = project_dir / project.DEFAULT_OUTPUT
+    assert not list(out.glob("doc-*.html"))
+    assert "nav-docs" not in (out / "index.html").read_text()
+
+
+def test_the_settings_can_stop_the_written_pages(run_cli, project_dir, stub_bender):
+    (project_dir / "svdocgraph.yml").write_text("docs: false\n")
+    assert _gen(run_cli, project_dir) == 0
+    out = project_dir / project.DEFAULT_OUTPUT
+    assert not list(out.glob("doc-*.html"))
+    assert (out / "index.html").is_file()
+
+
+def test_a_directory_from_the_settings_gives_pages(run_cli, project_dir, stub_bender):
+    manual = project_dir / "manual"
+    manual.mkdir()
+    (manual / "bring_up.md").write_text("# Bring up\n\nHow to start `demo_top`.\n")
+    (project_dir / "svdocgraph.yml").write_text("docs: [manual]\n")
+    assert _gen(run_cli, project_dir) == 0
+    page = project_dir / project.DEFAULT_OUTPUT / "doc-manual-bring_up.html"
+    assert page.is_file()
+    assert 'href="module-demo_top.html"' in page.read_text()
+
+
+def test_the_comment_above_a_module_becomes_a_page_section(run_cli, project_dir,
+                                                           stub_bender):
+    """The RTL carries its own documentation. hwpe-stream writes it in
+    reStructuredText in a `/** */` block above the module."""
+    assert _gen(run_cli, project_dir) == 0
+    out = project_dir / project.DEFAULT_OUTPUT
+    page = (out / "module-demo_top.html").read_text()
+    assert "module-doc" in page
+    assert "wires two adders in series" in page
+    assert 'href="module-demo_bus_if.html"' in page, "a bold name becomes a link"
+    assert "Solderpad" not in page, "the licence block is not the documentation"
+
+    model = json.loads((out / "model.json").read_text())
+    assert model["modules"]["demo_top"]["desc"].startswith("The demo_top module wires")
