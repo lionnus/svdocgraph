@@ -11,7 +11,9 @@ SVDocGraph makes documentation for SystemVerilog designs that use
 
 The tool reads a Bender project and writes a static web site. The site shows the
 design hierarchy, the ports and the parameters of each module, and a block diagram
-of the contents of each module.
+of the contents of each module. The site also contains the Markdown documentation
+of the repository. Thus one site gives the full documentation of the project: the
+text that a person wrote, and the data that the tool reads from the RTL.
 
 The tool uses [slang](https://github.com/MikePopoloski/slang), through `pyslang`,
 to elaborate the design. Thus the tool expands the macros, resolves the parameter
@@ -29,7 +31,14 @@ design. The tool does not guess this data from the source text.
   its page.
 - **Package graph.** The graph shows the Bender dependencies with their versions,
   their locked revisions and their sources.
-- **Search.** Push `/` or Ctrl-K to search for a module, a port or a package.
+- **The written documentation.** The tool reads the README and the Markdown files
+  in `doc/` or `docs/`, and puts those pages in the same site. A page with the name
+  of a module attaches to the page of that module. In the text, the name of a
+  module becomes a link to it.
+- **File graph.** The graph shows each source file of the repository and the files
+  that it needs.
+- **Search.** Push `/` or Ctrl-K to search for a module, a port, a package or a
+  written page.
 - **Offline output.** The site contains only HTML, CSS, JavaScript and SVG. A server
   is not necessary. Copy the directory to any static web host.
 
@@ -41,6 +50,7 @@ design. The tool does not guess this data from the source text.
 | [Graphviz](https://graphviz.org/) (`dot`) | Calculates the layout of each graph | Recommended | `apt install graphviz` or `brew install graphviz` |
 | `pyslang` 11 | Elaborates the design | Yes | Installed with the tool |
 | `Jinja2`, `PyYAML` | Makes the HTML pages and reads the Bender files | Yes | Installed with the tool |
+| `markdown-it-py` | Reads the Markdown files of the repository | Yes | Installed with the tool |
 
 A simulator or a licence is not necessary. The slang compiler is included in the
 `pyslang` package.
@@ -122,6 +132,7 @@ optional.
 output: .svdocgraph        # Directory for the documentation
 tops: [my_testbench_top]   # Additional top modules to elaborate
 name: My Design            # Title in the page header
+docs: [manual]             # More directories with Markdown. `false` reads none
 ```
 
 ### Integration in a project
@@ -157,15 +168,16 @@ Bender.yml / Bender.lock
    slang / pyslang    elaborates each module of the root package
         v
    design model       modules, ports, parameters, instances, connections
+        +  README.md, doc/*.md    (the written documentation)
         v
-   Graphviz + Jinja   block diagrams, hierarchy, package graph -> static site
+   Graphviz + Jinja   block diagrams, hierarchy, files, packages, written pages
 ```
 
 ## Development
 
 ```sh
 uv sync --extra dev
-uv run pytest                  # 160 tests
+uv run pytest                  # 191 tests
 uv run pytest --cov            # tests with the coverage report
 uv run ruff check .
 ```

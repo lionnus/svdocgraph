@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Files{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <div class="eyebrow">Design map</div>
+  <h1>Source files</h1>
+  <p class="lede">How the files of this repository connect. An edge goes from a file to
+  each file that it needs, because it instantiates a module or an interface that the
+  other file declares.</p>
+</div></div>
+
+<section class="card">
+  {% if file_svg %}
+  <figure class="graph graph-tall" data-zoom>{{ file_svg|safe }}
+    <figcaption class="graph-tools">
+      <button data-zoom-in>+</button><button data-zoom-out>-</button><button data-zoom-reset>reset</button>
+      <span class="graph-hint">scroll to zoom · drag to pan</span>
+    </figcaption>
+  </figure>
+  {% else %}
+  <p class="empty">Graphviz <code>dot</code> not found - install Graphviz to render graphs.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Files and their units</h2>
+  <table class="tbl">
+    <thead><tr><th>File</th><th>Package</th><th>Units</th></tr></thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td class="mono">{{ row.path }}</td>
+        <td>{% if row.package %}<a href="package-{{ row.package }}.html">{{ row.package }}</a>{% endif %}</td>
+        <td>
+          {% for u in row.units %}
+          <a class="chip" href="module-{{ u }}.html">{{ u }}</a>
+          {% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

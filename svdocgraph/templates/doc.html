@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ page.title }}{% endblock %}
+{% block content %}
+<div class="breadcrumb">
+  <a href="index.html">{{ project_name }}</a> ›
+  <span>{{ page.rel_path }}</span>
+</div>
+
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Documentation</div>
+    <h1>{{ page.title }}</h1>
+    <div class="meta-row">
+      <span class="pill pill-file mono">{{ page.rel_path }}</span>
+      {% if page.module %}
+      <a class="pill pill-pkg" href="module-{{ page.module }}.html">module {{ page.module }}</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="doc-layout">
+  {% if page.headings|length > 2 %}
+  <nav class="doc-toc">
+    <div class="doc-toc-title">On this page</div>
+    <ul>
+      {% for level, text, anchor in page.headings %}
+      {% if level > 1 %}
+      <li class="toc-l{{ level }}"><a href="#{{ anchor }}">{{ text }}</a></li>
+      {% endif %}
+      {% endfor %}
+    </ul>
+  </nav>
+  {% endif %}
+  <article class="card prose">
+    {{ page.html|safe }}
+  </article>
+</div>
+{% endblock %}

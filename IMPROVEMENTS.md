@@ -86,9 +86,25 @@ directory to Pages.
 - A project in a directory with a space in its name now works: slang divides a
   command file at each space, so each entry gets quotation marks.
 
+### Written documentation
+
+- The tool reads `README.md` and the Markdown files in `doc/`, `docs/` and
+  `documentation/`, and writes them as pages of the same site.
+- A page with the name of a module attaches to that module. `axi/doc/axi_xbar.md`
+  and the module `axi_xbar` link to each other. On pulp-platform/axi, 7 of the 9
+  pages attach in this way.
+- In the text, a `code` element with the name of a module or a package becomes a
+  link. The images are copied into the site. The links between the pages point at
+  the new names.
+- The HTML in a Markdown file is escaped, not written into the page.
+- The file graph shows each source file and the files that it needs.
+
 ## Known limitations
 
 - Clock and reset nets are detected by name pattern, not by tracing clock trees.
+- Sphinx `.rst` files are not read. Only Markdown is read.
+- The `nav` of an `mkdocs.yml` is not read. The pages are in the sequence of their
+  paths, with the README first.
 - Only modules reachable as a top of the root package (or reachable from one) are
   elaborated; dependency modules that are never instantiated appear as black boxes.
 - Connection grouping uses the base signal name, so a bit-select and the full
@@ -133,6 +149,8 @@ effort, good payoff for parameterised or conditionally-built modules.
 - Package pages with package contents: typedefs and parameters declared in a
   SystemVerilog package, not only the modules that belong to it.
 - Incremental builds and parallel graph rendering for very large designs.
+- Read `.rst` with docutils, and the `nav` of `mkdocs.yml`, for a project that
+  already uses Sphinx or MkDocs.
 - Single-file output (`svdocgraph gen --single-file`) producing one self-contained
   `svdocgraph.html`, for attaching a design map to a review or an email. The site is
   already offline-capable; this would fold the per-module pages into one document

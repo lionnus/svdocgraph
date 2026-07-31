@@ -182,3 +182,33 @@ def test_hierarchy_skips_a_top_that_was_not_extracted(design):
     design.tops.append("absent_top")
     dot = graphs.hierarchy_dot(design)
     assert '"absent_top" ->' not in dot
+
+
+# -- the file graph --------------------------------------------------------
+
+
+def test_the_file_graph_joins_the_files_of_the_design(design):
+    design.modules["top"].rel_file = "rtl/top.sv"
+    design.modules["adder"].rel_file = "rtl/adder.sv"
+    dot = graphs.file_dot(design)
+    assert '"rtl/top.sv" -> "rtl/adder.sv"' in dot
+    assert "top.sv" in dot and "adder.sv" in dot
+
+
+def test_the_file_graph_marks_a_file_of_a_dependency(design):
+    design.modules["top"].rel_file = "rtl/top.sv"
+    design.modules["adder"].rel_file = "deps/adder.sv"
+    design.modules["adder"].package = "common_cells"
+    dot = graphs.file_dot(design)
+    assert graphs.C_DEP in dot, "a file of a dependency has another colour"
+
+
+def test_the_file_graph_needs_a_file_for_each_module(design):
+    """Without the file of any module there is nothing to draw."""
+    assert graphs.file_dot(design) == ""
+
+
+def test_the_file_graph_has_no_edge_from_a_file_to_itself(design):
+    design.modules["top"].rel_file = "rtl/all.sv"
+    design.modules["adder"].rel_file = "rtl/all.sv"
+    assert '"rtl/all.sv" -> "rtl/all.sv"' not in graphs.file_dot(design)

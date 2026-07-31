@@ -17,6 +17,7 @@
       {% if mod.package %}<a class="pill pill-pkg" href="package-{{ mod.package }}.html">{{ mod.package }}</a>{% endif %}
       {% if mod.rel_file %}<span class="pill pill-file mono">{{ mod.rel_file }}{% if mod.line %}:{{ mod.line }}{% endif %}</span>{% endif %}
       {% if mod.elaborated %}<span class="pill pill-ok" title="Ports and widths resolved by slang elaboration">elaborated</span>{% endif %}
+      {% if mod.doc_page %}<a class="pill pill-doc" href="{{ mod.doc_page }}.html">documentation</a>{% endif %}
     </div>
   </div>
   <div class="port-summary">
