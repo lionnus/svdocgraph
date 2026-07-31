@@ -27,56 +27,92 @@ inferred from text.
 - **Self-contained output.** Static HTML, CSS, JS and inline SVG. No server and no
   network needed to view it; host the folder on GitLab or GitHub Pages as-is.
 
-## Install
+## Quick start
 
 SVDocGraph is a standalone tool, the same way `bender`, `morty` or `svase` are: you
-install it once and run it inside any Bender project.
+install it once and run it inside any Bender project. Nothing is vendored into the
+project and there is nothing to configure.
 
 ```sh
-# with uv (recommended)
-uv tool install svdocgraph
-
-# or with pipx
-pipx install svdocgraph
-
-# or from source
-git clone <this-repo> && cd svdocgraph && uv tool install .
+uv tool install svdocgraph      # or: pipx install svdocgraph
+cd my-bender-project
+svdocgraph gen --open
 ```
 
-It needs [Graphviz](https://graphviz.org/) (`dot`) on the `PATH` to render graphs.
-Everything else (the slang compiler) ships with the `pyslang` dependency.
+That elaborates the design, writes the docs to `.svdocgraph/` in the project root,
+and opens them in your browser. Later, `svdocgraph open` reopens them without
+rebuilding.
 
-## Use
+To try it without installing anything: `uvx svdocgraph gen --open`.
 
-Run it from the root of a Bender project (where `Bender.yml` lives):
+SVDocGraph needs [Graphviz](https://graphviz.org/) (`dot`) and `bender` on the
+`PATH`. Everything else (the slang compiler) ships with the `pyslang` dependency.
+
+## Commands
+
+Run from anywhere inside a Bender project; the project root is the nearest
+directory above you containing a `Bender.yml`.
 
 ```sh
-svdocgraph build            # generate ./svdocgraph_site
-svdocgraph build --open     # ...and open it in a browser
-svdocgraph serve            # build, then serve at http://localhost:8080
+svdocgraph gen              # generate the docs into ./.svdocgraph
+svdocgraph gen --open       # ...and open them
+svdocgraph open             # open the last build (generates it if missing)
+svdocgraph serve            # generate, then serve at http://localhost:8080
+svdocgraph gen -o public    # write somewhere else, e.g. for CI / Pages
+svdocgraph init             # optional: write svdocgraph.yml + .gitignore rule
 svdocgraph dump -o design.json   # just the extracted model as JSON
 ```
+
+`build` is kept as an alias for `gen`.
 
 Zero configuration: SVDocGraph asks `bender` for the source set, include
 directories, macro defines, and the package each file belongs to, then elaborates
 every module declared by the root package. Use `--top NAME` to force extra top
 modules if some are only reachable from a testbench target.
 
+### Where the output goes
+
+The docs land in a single tool-owned directory, `.svdocgraph/`, next to `Bender.yml`
+— one entry to ignore, no chance of colliding with a hand-written `docs/`. The first
+`gen` adds it to the repository's `.gitignore` for you. The site is plain static
+files: open `.svdocgraph/index.html` straight from disk (search, graphs and theme
+all work offline, no server needed), or point any static host at the directory.
+
+`gen` refuses to write into a non-empty directory it did not generate itself, so
+`-o docs` cannot silently eat your handwritten documentation; pass `--force` if you
+really mean it.
+
+### Optional config
+
+`svdocgraph init` writes an `svdocgraph.yml` so that a plain `svdocgraph gen` — and
+therefore `make docs` — needs no flags:
+
+```yaml
+output: .svdocgraph      # where the docs go
+tops: [my_testbench_top] # extra tops to elaborate
+name: My Design          # title in the site header
+```
+
 ## How it fits into a project
 
 Think of it the way software projects use MkDocs, Sphinx or `cargo doc`.
 
 1. **As a standalone tool (recommended).** Installed once on your machine or in CI,
-   run in any Bender repository. Nothing is vendored into the project.
+   run in any Bender repository.
 
 2. **As a documentation target in your build.** Add a target to the project that
    already drives `bender`:
 
    ```makefile
-   .PHONY: docs
+   .PHONY: docs docs-open
    docs:
-   	svdocgraph build -o docs/design
+   	svdocgraph gen
+
+   docs-open:
+   	svdocgraph gen --open
    ```
+
+   `make docs` is quiet enough for CI with `svdocgraph gen -q`.
 
 3. **As a CI job that publishes to Pages.** For example, GitLab CI:
 
@@ -86,13 +122,12 @@ Think of it the way software projects use MkDocs, Sphinx or `cargo doc`.
      script:
        - pip install svdocgraph
        - apt-get update && apt-get install -y graphviz bender
-       - svdocgraph build -o public
+       - svdocgraph gen -o public
      artifacts:
        paths: [public]
    ```
 
-The generated site is just files, so it drops into any static host. Add the output
-directory (`svdocgraph_site/`, `public/`, ...) to `.gitignore`.
+The generated site is just files, so it drops into any static host.
 
 ## How it works
 

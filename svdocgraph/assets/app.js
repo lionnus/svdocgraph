@@ -31,8 +31,18 @@
   });
 
   // ---- command palette ----
+  // The index is inlined in every page so search works when the site is opened
+  // straight from disk (file:// pages are not allowed to fetch design.json).
   let DATA = { modules: [], packages: [] };
-  fetch("design.json").then((r) => r.json()).then((d) => { DATA = d; }).catch(() => {});
+  const inline = document.getElementById("svdg-data");
+  if (inline) {
+    try {
+      const d = JSON.parse(inline.textContent);
+      if (d && d.modules) DATA = d;
+    } catch (e) { /* fall through to the fetch below */ }
+  }
+  if (!DATA.modules.length)
+    fetch("design.json").then((r) => r.json()).then((d) => { DATA = d; }).catch(() => {});
 
   const pal = document.getElementById("palette");
   const pin = document.getElementById("palette-input");

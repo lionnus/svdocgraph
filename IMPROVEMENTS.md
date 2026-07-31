@@ -21,11 +21,25 @@ dependencies). The following works today:
 
 ### Building the docs
 
-`svdocgraph build` is the supported way to generate the documentation. It requires
+`svdocgraph gen` is the supported way to generate the documentation. It requires
 `bender` and Graphviz (`dot`) on the `PATH`; the slang compiler ships with the
 `pyslang` dependency. To wire it into a project, add a target that runs it (see the
 `docs` example in the README) or run it as a CI job that publishes the output
 directory to Pages.
+
+### Project ergonomics
+
+- The project root is found by walking up to the nearest `Bender.yml`, so the tool
+  works from any subdirectory.
+- Output defaults to `.svdocgraph/` in the project root, and the first build adds
+  that directory to the repository `.gitignore`.
+- A build marks its output directory with `.svdocgraph-build.json`; `gen` refuses to
+  clean a non-empty directory without that marker unless `--force` is given, and
+  only removes files matching its own naming scheme.
+- The search index is inlined into every page, so the site is fully functional when
+  opened over `file://` (a `file://` page cannot `fetch()` `design.json`).
+- `svdocgraph.yml` (optional, written by `svdocgraph init`) sets the output
+  directory, extra tops and the display name, so `make docs` needs no flags.
 
 ## Known limitations
 
@@ -69,7 +83,13 @@ effort, good payoff for parameterised or conditionally-built modules.
 - Bit-accurate connectivity: distinguish bit-selects and struct fields so partial
   connections are visible.
 - Source links: link each module and port to its line in a repo web view.
-- Config file (`svdocgraph.yml`): exclude packages, pick tops, set the theme.
+- Config file: extend `svdocgraph.yml` with package excludes and a theme setting
+  (output, tops and name are supported today).
 - Package pages with package contents: typedefs and parameters declared in a
   SystemVerilog package, not only the modules that belong to it.
 - Incremental builds and parallel graph rendering for very large designs.
+- Single-file output (`svdocgraph gen --single-file`) producing one self-contained
+  `svdocgraph.html`, for attaching a design map to a review or an email. The site is
+  already offline-capable; this would fold the per-module pages into one document
+  with a hash router.
+- `svdocgraph serve --watch`: rebuild when RTL changes.
