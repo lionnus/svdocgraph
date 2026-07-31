@@ -6,6 +6,10 @@
 [![python](https://img.shields.io/badge/python-3.9%20%E2%80%93%203.13-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
+**[See an example site](https://lionnus.github.io/svdocgraph/)** — the documentation
+of [pulp-platform/axi](https://github.com/pulp-platform/axi), which CI makes with
+each change and publishes to GitHub Pages.
+
 SVDocGraph makes documentation for SystemVerilog designs that use
 [Bender](https://github.com/pulp-platform/bender).
 
@@ -31,10 +35,10 @@ design. The tool does not guess this data from the source text.
   its page.
 - **Package graph.** The graph shows the Bender dependencies with their versions,
   their locked revisions and their sources.
-- **The written documentation.** The tool reads the README and the Markdown files
-  in `doc/` or `docs/`, and puts those pages in the same site. A page with the name
-  of a module attaches to the page of that module. In the text, the name of a
-  module becomes a link to it.
+- **The written documentation.** The tool reads the README, and the Markdown and
+  reStructuredText files in `doc/` or `docs/`. It puts those pages in the same
+  site. A page with the name of a module attaches to the page of that module. In
+  the text, the name of a module becomes a link to it.
 - **File graph.** The graph shows each source file of the repository and the files
   that it needs.
 - **Search.** Push `/` or Ctrl-K to search for a module, a port, a package or a
@@ -51,6 +55,7 @@ design. The tool does not guess this data from the source text.
 | `pyslang` 11 | Elaborates the design | Yes | Installed with the tool |
 | `Jinja2`, `PyYAML` | Makes the HTML pages and reads the Bender files | Yes | Installed with the tool |
 | `markdown-it-py` | Reads the Markdown files of the repository | Yes | Installed with the tool |
+| `docutils` | Reads the reStructuredText files of a Sphinx project | Yes | Installed with the tool |
 
 A simulator or a licence is not necessary. The slang compiler is included in the
 `pyslang` package.
@@ -122,6 +127,22 @@ search function, the graphs and the theme operate offline.
 The `gen` command does not write into a directory that contains other files. To
 replace such a directory, use the `--force` option.
 
+### The written documentation
+
+The tool reads:
+
+- `README.md` in the project root;
+- each `.md` and `.rst` file in `doc/`, `docs/` and `documentation/`;
+- the directory that `.readthedocs.yaml` gives, if the project has that file. A
+  `configuration: conf.py` means the root of the repository.
+
+A page that has the name of a module attaches to that module. For example,
+`doc/axi_xbar.md` and the module `axi_xbar` link to each other.
+
+For a Sphinx project, docutils reads the standard directives. It cannot run a
+Sphinx extension, thus a `wavedrom` or a `toctree` directive gives no output. A
+`raw` directive also gives no output, because raw HTML must not enter the site.
+
 ### Configuration
 
 The `svdocgraph init` command writes an `svdocgraph.yml` file. Then the `svdocgraph
@@ -177,7 +198,7 @@ Bender.yml / Bender.lock
 
 ```sh
 uv sync --extra dev
-uv run pytest                  # 191 tests
+uv run pytest                  # 202 tests
 uv run pytest --cov            # tests with the coverage report
 uv run ruff check .
 ```
@@ -196,7 +217,7 @@ Coverage is 97% of the statements and the branches. There are two controls:
 The tests were examined with a mutation experiment: 31 faults were put into the
 code on purpose, one at a time. The tests found each of them.
 
-Two workflows operate in CI:
+Three workflows operate in CI:
 
 - **`ci`** — runs `ruff`, then the tests on Python 3.9 to 3.13, then the coverage
   measurement. The last job builds the wheel, installs it in an empty environment,
@@ -214,6 +235,11 @@ Two workflows operate in CI:
   interfaces and no diagnostics. `scripts/check_site.py` contains these tests. Each
   job also keeps the documentation as an artifact. You can download the artifact and
   read it.
+
+- **`pages`** — makes the documentation of `pulp-platform/axi` and publishes it to
+  [GitHub Pages](https://lionnus.github.io/svdocgraph/). The example shows both
+  parts that this tool joins: the interfaces of the RTL, and the written page for
+  each large module in `doc/`.
 
 Each design has a fixed tag or commit. Thus a change in a design cannot cause a
 failure in a pull request. The weekly job finds a failure that a new version of

@@ -146,3 +146,125 @@ def test_the_page_keeps_its_text_for_the_search(built):
 def test_the_readme_is_first_in_the_sequence(built):
     pages, _ = built
     assert docs.order_pages(pages)[0].slug == "doc-readme"
+
+
+# -- reStructuredText ------------------------------------------------------
+
+rst = pytest.mark.skipif(not docs.HAVE_RST, reason="docutils absent")
+
+RST_PAGE = """\
+=================
+The stream engine
+=================
+
+``demo_adder`` moves the data.
+
+The protocol
+------------
+
+Each transfer needs a handshake.
+
+.. wavedrom::
+
+   { "signal": [{ "name": "clk" }] }
+
+.. figure:: img/stream.png
+
+   A diagram.
+"""
+
+
+@rst
+def test_a_restructuredtext_page_becomes_html(tmp_path):
+    (tmp_path / "doc").mkdir()
+    (tmp_path / "doc" / "stream.rst").write_text(RST_PAGE)
+    pages, _ = docs.build_pages(str(tmp_path), [os.path.join("doc", "stream.rst")])
+    page = pages["doc-stream"]
+    assert page.title == "The stream engine"
+    assert "<h2>" in page.html or 'id="the-protocol"' in page.html
+    assert "handshake" in page.html
+
+
+@rst
+def test_a_directive_of_a_sphinx_extension_does_not_break_the_page(tmp_path):
+    """`wavedrom` comes from an extension. docutils cannot read it, but the rest
+    of the page must still appear, with no error block."""
+    (tmp_path / "a.rst").write_text(RST_PAGE)
+    pages, _ = docs.build_pages(str(tmp_path), ["a.rst"])
+    html = pages["doc-a"].html
+    assert "handshake" in html
+    assert "system-message" not in html
+    assert "wavedrom" not in html.lower()
+
+
+@rst
+def test_a_raw_directive_does_not_reach_the_page(tmp_path):
+    """The rule for reStructuredText is the rule for Markdown: no raw HTML."""
+    (tmp_path / "a.rst").write_text(
+        "Title\n=====\n\n.. raw:: html\n\n   <script>alert(1)</script>\n"
+    )
+    pages, _ = docs.build_pages(str(tmp_path), ["a.rst"])
+    assert "<script>" not in pages["doc-a"].html
+
+
+@rst
+def test_an_include_directive_cannot_read_another_file(tmp_path):
+    secret = tmp_path / "secret.txt"
+    secret.write_text("the password is 1234")
+    (tmp_path / "a.rst").write_text(f"Title\n=====\n\n.. include:: {secret}\n")
+    pages, _ = docs.build_pages(str(tmp_path), ["a.rst"])
+    assert "password" not in pages["doc-a"].html
+
+
+@rst
+def test_a_heading_keeps_the_identifier_that_docutils_made(tmp_path):
+    """Two elements with the same identifier would make the anchor ambiguous."""
+    (tmp_path / "a.rst").write_text(RST_PAGE)
+    pages, _ = docs.build_pages(str(tmp_path), ["a.rst"])
+    html = pages["doc-a"].html
+    assert html.count('id="the-protocol"') == 1
+    assert ("the-protocol") in [h[2] for h in pages["doc-a"].headings]
+
+
+@rst
+def test_the_name_of_a_module_becomes_a_link_in_a_rst_page(tmp_path):
+    """docutils gives another element than Markdown for an inline literal."""
+    (tmp_path / "a.rst").write_text(RST_PAGE)
+    (tmp_path / "b.rst").write_text("T\n=\n\n`demo_adder` with one backtick.\n")
+    pages, _ = docs.build_pages(str(tmp_path), ["a.rst", "b.rst"])
+    targets = {"demo_adder": "module-demo_adder.html"}
+    assert 'href="module-demo_adder.html"' in docs.link_names(pages["doc-a"].html, targets)
+    assert 'href="module-demo_adder.html"' in docs.link_names(pages["doc-b"].html, targets)
+
+
+# -- the Read the Docs settings --------------------------------------------
+
+
+def test_the_read_the_docs_settings_give_the_directory(tmp_path):
+    (tmp_path / ".readthedocs.yaml").write_text(
+        "version: 2\nsphinx:\n  configuration: docs/source/conf.py\n"
+    )
+    assert docs.read_rtd_dirs(str(tmp_path)) == [os.path.join("docs", "source")]
+
+
+def test_a_configuration_in_the_root_gives_the_root(tmp_path):
+    """hwpe-doc keeps `conf.py` and the pages in the root of the repository."""
+    (tmp_path / ".readthedocs.yml").write_text("version: 2\nsphinx:\n  configuration: conf.py\n")
+    assert docs.read_rtd_dirs(str(tmp_path)) == ["."]
+
+
+def test_pages_in_the_root_are_found_but_not_the_whole_repository(tmp_path):
+    (tmp_path / ".readthedocs.yml").write_text("version: 2\nsphinx:\n  configuration: conf.py\n")
+    (tmp_path / "index.rst").write_text("Title\n=====\n")
+    (tmp_path / "rtl").mkdir()
+    (tmp_path / "rtl" / "notes.md").write_text("# Not documentation\n")
+    assert docs.find_files(str(tmp_path)) == ["index.rst"]
+
+
+def test_a_broken_read_the_docs_file_is_ignored(tmp_path):
+    (tmp_path / ".readthedocs.yaml").write_text("sphinx: [not, a, mapping\n")
+    assert docs.read_rtd_dirs(str(tmp_path)) == []
+
+
+def test_no_read_the_docs_file_gives_no_directory(tmp_path):
+    assert docs.read_rtd_dirs(str(tmp_path)) == []

@@ -88,8 +88,15 @@ directory to Pages.
 
 ### Written documentation
 
-- The tool reads `README.md` and the Markdown files in `doc/`, `docs/` and
-  `documentation/`, and writes them as pages of the same site.
+- The tool reads `README.md`, and the Markdown and reStructuredText files in
+  `doc/`, `docs/` and `documentation/`. It writes them as pages of the same site.
+- `.readthedocs.yaml` gives one more directory. `configuration: conf.py` means the
+  root of the repository, and then only the files directly in the root are read.
+- docutils reads the reStructuredText. It cannot run a Sphinx extension: a
+  `wavedrom`, `svprettyplot` or `toctree` directive gives no output, and a `raw`
+  directive is stopped for the same reason as the HTML in a Markdown file.
+  Verified against the 8 pages of pulp-platform/hwpe-doc: each one renders, with
+  no error block in the output.
 - A page with the name of a module attaches to that module. `axi/doc/axi_xbar.md`
   and the module `axi_xbar` link to each other. On pulp-platform/axi, 7 of the 9
   pages attach in this way.
@@ -102,9 +109,14 @@ directory to Pages.
 ## Known limitations
 
 - Clock and reset nets are detected by name pattern, not by tracing clock trees.
-- Sphinx `.rst` files are not read. Only Markdown is read.
-- The `nav` of an `mkdocs.yml` is not read. The pages are in the sequence of their
-  paths, with the README first.
+- A Sphinx extension does not run, so the output of `wavedrom`, `svprettyplot` and
+  a similar directive is not in the page. A `:ref:` or `:numref:` role gives plain
+  text, not a link.
+- The `nav` of an `mkdocs.yml`, and the `toctree` of an `index.rst`, are not read.
+  The pages are in the sequence of their paths, with the README first.
+- `pulp-platform/hwpe-doc` is a repository of documentation only. It has no
+  `Bender.yml`, thus this tool cannot run in it. The RTL of `hwpe-stream` and the
+  text of `hwpe-doc` are in two repositories.
 - Only modules reachable as a top of the root package (or reachable from one) are
   elaborated; dependency modules that are never instantiated appear as black boxes.
 - Connection grouping uses the base signal name, so a bit-select and the full
@@ -149,8 +161,8 @@ effort, good payoff for parameterised or conditionally-built modules.
 - Package pages with package contents: typedefs and parameters declared in a
   SystemVerilog package, not only the modules that belong to it.
 - Incremental builds and parallel graph rendering for very large designs.
-- Read `.rst` with docutils, and the `nav` of `mkdocs.yml`, for a project that
-  already uses Sphinx or MkDocs.
+- Read the `nav` of `mkdocs.yml` and the `toctree` of `index.rst`, to give the
+  pages the sequence that the author chose.
 - Single-file output (`svdocgraph gen --single-file`) producing one self-contained
   `svdocgraph.html`, for attaching a design map to a review or an email. The site is
   already offline-capable; this would fold the per-module pages into one document
