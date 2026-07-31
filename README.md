@@ -45,8 +45,32 @@ rebuilding.
 
 To try it without installing anything: `uvx svdocgraph gen --open`.
 
-SVDocGraph needs [Graphviz](https://graphviz.org/) (`dot`) and `bender` on the
-`PATH`. Everything else (the slang compiler) ships with the `pyslang` dependency.
+## Dependencies
+
+Two things must be on your `PATH`; everything else is a Python dependency that
+`pip`/`uv` installs for you.
+
+| What | Why | Required | Install |
+| --- | --- | --- | --- |
+| [`bender`](https://github.com/pulp-platform/bender) | source set, include dirs, defines, package map | yes | `curl https://pulp-platform.github.io/bender/init -sSf \| sh` or `cargo install bender` |
+| [Graphviz](https://graphviz.org/) (`dot`) | lays out every diagram | strongly recommended | `apt install graphviz` / `brew install graphviz` |
+| `pyslang` >= 11 | the slang elaborator, as a wheel | yes | installed automatically |
+| `Jinja2`, `PyYAML` | templating, `Bender.yml` parsing | yes | installed automatically |
+
+No SystemVerilog simulator or license is needed: slang ships as a binary wheel
+inside `pyslang`, so there is nothing to compile.
+
+```sh
+svdocgraph doctor    # prints what is found, what is missing, and how to install it
+```
+
+`gen` refuses to run without `bender` (exit code 3) rather than producing an empty
+site, and warns when Graphviz is missing (the site still builds, minus the
+diagrams).
+
+The `pyslang` floor is a hard requirement, not a preference: `Driver` moved to
+`pyslang.driver` in 11.0, and on older releases the extractor finds nothing and
+would silently produce an empty design. Python 3.9 through 3.13 are tested in CI.
 
 ## Commands
 
@@ -142,6 +166,38 @@ Bender.yml / Bender.lock
         v
    Graphviz + Jinja  internal netlists, hierarchy, package graph -> static site
 ```
+
+## Development
+
+```sh
+uv sync --extra dev
+uv run pytest          # unit + end-to-end tests, no bender installation needed
+uv run ruff check .
+```
+
+The tests drive the CLI against a small fixture design in `tests/fixtures/demo`
+using a stub `bender`, so they run anywhere.
+
+Two workflows run in CI:
+
+- **`ci`** — lint, the test suite on Python 3.9-3.13, and a packaging job that
+  builds the wheel, installs it into a clean environment and drives the installed
+  entry point (the templates, CSS, JS and fonts must ship inside it).
+- **`integration`** — generates documentation for two real
+  [PULP Platform](https://github.com/pulp-platform) designs with a real `bender`:
+  [`common_cells`](https://github.com/pulp-platform/common_cells) (many small,
+  heavily parameterised modules) and [`axi`](https://github.com/pulp-platform/axi)
+  (SV interfaces with modports). Each run asserts a floor on what was extracted —
+  module and interface counts, specific units such as `AXI_BUS`, zero
+  diagnostics, graphs actually rendered — and uploads the generated site as a
+  build artifact you can download and browse. It runs on every push and pull
+  request, plus weekly.
+
+The designs are pinned to a release tag, so upstream RTL changes cannot turn a
+pull request red; the weekly run is what catches breakage from the things that do
+float (a new bender, pyslang, Graphviz or runner image). Bumping a pin is a
+deliberate commit. `scripts/check_site.py` holds the assertions and can be pointed
+at any generated site by hand.
 
 ## License
 

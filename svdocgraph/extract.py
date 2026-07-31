@@ -30,10 +30,15 @@ import re
 from .bender import BenderInfo
 from .model import Design, Instance, Module, Param, Port, PortConn
 
+# `Driver` lives in `pyslang.driver` since pyslang 11; earlier releases expose a
+# `pyslang.Driver` with a different command-line API that this extractor cannot
+# drive. Accept both so the version check below can report the real reason instead
+# of quietly producing an empty design.
 try:
     from pyslang.driver import Driver
     HAVE_PYSLANG = True
-except Exception:  # pragma: no cover - import guard
+except ImportError:  # pragma: no cover - depends on the installed pyslang
+    Driver = None
     HAVE_PYSLANG = False
 
 
@@ -249,10 +254,22 @@ def _collapse_instances(raw: list[Instance]) -> list[Instance]:
     return [out[k] for k in order]
 
 
+def _definition_kind(defn) -> str:
+    """"module" / "interface" / "program" for an elaborated definition symbol.
+
+    slang reports this as ``DefinitionKind.Module`` etc.; without it every
+    elaborated interface would be presented as a module.
+    """
+    raw = getattr(defn, "definitionKind", None)
+    name = getattr(raw, "name", "") or str(raw).rsplit(".", 1)[-1]
+    kind = name.split(":")[0].strip().lower()
+    return kind if kind in ("module", "interface", "program", "package") else "module"
+
+
 def _module_from_body(body, sm) -> Module:
     defn = getattr(body, "definition", None)
     name = defn.name if defn is not None else body.name
-    mod = Module(name=name, elaborated=True)
+    mod = Module(name=name, kind=_definition_kind(defn), elaborated=True)
     # location / provenance
     loc = getattr(defn, "location", None)
     if loc is not None and sm is not None:
@@ -309,7 +326,10 @@ def extract_design(
     design.diagnostics.extend(bender.diagnostics)
 
     if not HAVE_PYSLANG:
-        design.diagnostics.append("pyslang not installed; cannot extract design.")
+        design.diagnostics.append(
+            "pyslang is missing or too old (need >=11); cannot extract design. "
+            "Run `svdocgraph doctor`."
+        )
         return design
     if not cmd_file or not os.path.exists(cmd_file):
         design.diagnostics.append("No slang command file (bender flist missing).")

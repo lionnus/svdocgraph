@@ -1,0 +1,81 @@
+name: ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv run --extra dev ruff check .
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor is what pyproject claims; the ceiling is the newest pyslang
+        # wheel target. Both ends are load-bearing, so both are tested.
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install Graphviz
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends graphviz
+      - run: uv sync --extra dev --python ${{ matrix.python }}
+      - run: uv run --extra dev --python ${{ matrix.python }} pytest -v
+
+  package:
+    # The tool is installed with `uv tool install` / `pipx`, so the wheel - not the
+    # source tree - is what users actually run. Build it and drive it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install Graphviz
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends graphviz
+      - run: uv build
+      - name: Install the wheel into a clean environment
+        run: |
+          uv venv /tmp/clean
+          uv pip install --python /tmp/clean/bin/python dist/*.whl
+      - name: Templates, assets and fonts must ship in the wheel
+        run: |
+          /tmp/clean/bin/python - <<'PY'
+          import pathlib, svdocgraph
+          pkg = pathlib.Path(svdocgraph.__file__).parent
+          missing = [p for p in ("templates/base.html", "templates/module.html",
+                                 "assets/style.css", "assets/app.js",
+                                 "assets/fonts/plex-sans-400.woff2")
+                     if not (pkg / p).is_file()]
+          assert not missing, f"missing from wheel: {missing}"
+          print("wheel contents OK")
+          PY
+      - name: The entry point runs
+        run: |
+          /tmp/clean/bin/svdocgraph --version
+          /tmp/clean/bin/svdocgraph --help
+      - name: doctor reports the missing bender rather than crashing
+        run: |
+          set +e
+          out=$(/tmp/clean/bin/svdocgraph doctor); rc=$?
+          echo "$out"
+          [ $rc -eq 3 ] || { echo "expected exit 3 without bender, got $rc"; exit 1; }
+          echo "$out" | grep -q "cargo install bender" || { echo "no install hint"; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/

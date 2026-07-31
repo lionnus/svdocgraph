@@ -10,6 +10,11 @@ dependencies). The following works today:
 - slang elaborates every module declared by the root package, including modules
   with macro-defined parameters and SV interface ports that do not elaborate as
   plain tops. 70 modules were extracted (37 owned by the root package), 0 errors.
+- Also verified against two upstream PULP repositories in CI: `common_cells`
+  v1.40.0 (117 units) and `axi` v0.39.10 (144 units, 7 interfaces), both with
+  zero diagnostics.
+- Elaborated units keep their declaration kind, so interfaces (`AXI_BUS`,
+  `AXI_LITE`, ...) are presented and coloured as interfaces rather than modules.
 - Ports carry resolved direction, type and bit width; parameters carry resolved
   values; instances are collected through generate blocks and arrays; interface
   connections resolve to the connected stream/bus instance and its modport.
@@ -40,6 +45,27 @@ directory to Pages.
   opened over `file://` (a `file://` page cannot `fetch()` `design.json`).
 - `svdocgraph.yml` (optional, written by `svdocgraph init`) sets the output
   directory, extra tops and the display name, so `make docs` needs no flags.
+
+### Dependencies
+
+- `bender` and Graphviz are external programs; `svdocgraph doctor` reports both,
+  and `gen` fails fast (exit 3) when bender is missing instead of rendering an
+  empty site.
+- `pyslang` is pinned to `>=11,<12`. Releases 8-10 expose `pyslang.Driver` with a
+  different command-line API and silently extract zero modules; 11 moved it to
+  `pyslang.driver`. The floor is enforced in `pyproject.toml` and reported by
+  `doctor`.
+- Python 3.9-3.13 are exercised in CI, matching the versions pyslang ships wheels
+  for.
+
+### Automated testing
+
+- `tests/` drives the CLI end to end against a fixture design with a stub bender,
+  so the suite needs no bender installation and runs anywhere.
+- The `integration` workflow runs the real thing against `pulp-platform/axi` and
+  `pulp-platform/common_cells`, pinned to release tags, and asserts a floor on
+  what is extracted (module and interface counts, named units, zero diagnostics,
+  graphs rendered). It caught the interface-classification bug below.
 
 ## Known limitations
 

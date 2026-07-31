@@ -1,0 +1,138 @@
+name: integration
+
+# Generate documentation for real PULP Platform designs with real bender.
+#
+# The unit tests drive a stub bender against a four-file fixture; that catches
+# regressions in the CLI and the renderer, but not in the part that matters most:
+# elaborating a large third-party design whose sources, include dirs and defines
+# come from an actual bender resolve.
+#
+# Designs are pinned to a release tag so a run is reproducible and an upstream RTL
+# change can never turn a pull request red. Bumping a pin is a deliberate commit.
+# The weekly run keeps the pinned designs honest against everything that *does*
+# float: a new bender release, a new pyslang within the supported range, a new
+# Graphviz, a new Ubuntu image.
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  schedule:
+    - cron: "0 5 * * 1"     # Mondays, 05:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BENDER_VERSION: 0.28.1
+
+jobs:
+  design:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Foundation library: many small, heavily parameterised modules.
+          - name: common_cells
+            repo: pulp-platform/common_cells
+            ref: v1.40.0
+            checks: >-
+              --min-modules 90
+              --want-module cdc_2phase
+              --want-module fifo_v3
+              --want-module stream_arbiter
+          # Interface-heavy: SV interfaces with modports, the case that
+          # distinguishes this tool from a text-scraping doc generator.
+          - name: axi
+            repo: pulp-platform/axi
+            ref: v0.39.10
+            checks: >-
+              --min-modules 120
+              --min-interfaces 5
+              --want-interface AXI_BUS
+              --want-interface AXI_LITE
+              --want-module axi_xbar
+              --want-module axi_cdc
+    steps:
+      - name: Check out svdocgraph
+        uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Graphviz
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends graphviz
+
+      - name: Install bender
+        run: |
+          url="https://github.com/pulp-platform/bender/releases/download/v${BENDER_VERSION}"
+          url="${url}/bender-${BENDER_VERSION}-x86_64-linux-gnu-ubuntu22.04.tar.gz"
+          curl -fsSL "$url" -o /tmp/bender.tar.gz
+          sudo tar xzf /tmp/bender.tar.gz -C /usr/local/bin bender
+          bender --version
+
+      - name: Install svdocgraph from the built wheel
+        # Install the artefact users install, not the source tree.
+        run: |
+          uv build
+          uv tool install --force dist/*.whl
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: svdocgraph doctor
+        run: svdocgraph doctor
+
+      - name: Check out ${{ matrix.repo }} @ ${{ matrix.ref }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.repo }}
+          ref: ${{ matrix.ref }}
+          path: design
+
+      - name: Resolve dependencies with bender
+        working-directory: design
+        run: bender checkout
+
+      - name: Generate the documentation
+        working-directory: design
+        run: svdocgraph gen -o "$GITHUB_WORKSPACE/site"
+
+      - name: Check the generated site
+        run: |
+          python3 scripts/check_site.py site \
+            --require-graphs --max-diagnostics 0 ${{ matrix.checks }}
+
+      - name: Report what was extracted
+        if: always()
+        run: |
+          [ -f site/model.json ] || exit 0
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, os
+          m = json.load(open("site/model.json"))
+          mods = m["modules"]
+          kinds = {}
+          for mod in mods.values():
+              kinds[mod["kind"]] = kinds.get(mod["kind"], 0) + 1
+          print(f"### {os.environ['DESIGN']} @ {os.environ['DESIGN_REF']}\n")
+          print(f"- root package: `{m['root_package']}`")
+          print(f"- units: {len(mods)} ({', '.join(f'{v} {k}' for k, v in sorted(kinds.items()))})")
+          print(f"- tops: {len(m['tops'])}, packages: {len(m['packages'])}")
+          print(f"- diagnostics: {len(m['diagnostics'])}")
+          for d in m["diagnostics"][:10]:
+              print(f"  - {d}")
+          PY
+        env:
+          DESIGN: ${{ matrix.name }}
+          DESIGN_REF: ${{ matrix.ref }}
+
+      - name: Upload the generated site
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: svdocgraph-${{ matrix.name }}
+          path: site/
+          retention-days: 14

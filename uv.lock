@@ -388,10 +388,10 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "jinja2", specifier = ">=3.0" },
-    { name = "pyslang", specifier = ">=7.0" },
+    { name = "jinja2", specifier = ">=3.0,<4" },
+    { name = "pyslang", specifier = ">=11,<12" },
     { name = "pytest", marker = "extra == 'dev'" },
-    { name = "pyyaml", specifier = ">=5.4" },
+    { name = "pyyaml", specifier = ">=5.4,<7" },
     { name = "ruff", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev"]
