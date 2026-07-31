@@ -1,4 +1,4 @@
-"""Project conventions: root discovery, config, .gitignore, output-dir ownership."""
+"""The project rules: the root, the settings, the .gitignore and the output."""
 
 from __future__ import annotations
 

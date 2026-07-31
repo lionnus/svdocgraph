@@ -75,8 +75,10 @@ directory to Pages.
   extracted (module and interface counts, named units, zero diagnostics, graphs
   rendered). Building it caught the interface-classification bug below and the
   swallowed bender errors.
-- Coverage is measured with pytest-cov (statements and branches). The floor lives
-  in `pyproject.toml` and CI enforces it.
+- Coverage is measured with pytest-cov (statements and branches). It is 97%; the
+  minimum is in `pyproject.toml` and CI enforces it.
+- A project in a directory with a space in its name now works: slang divides a
+  command file at each space, so each entry gets quotation marks.
 
 ## Known limitations
 

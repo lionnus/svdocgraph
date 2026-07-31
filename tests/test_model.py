@@ -1,4 +1,4 @@
-"""Data-model rules: port direction, clock/reset detection, derived counts."""
+"""The data rules: the port direction, the clocks, the resets and the counts."""
 
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ def test_module_counts_and_classification():
             Instance(name="i_bus", module="my_if", is_interface=True),
         ],
     )
-    # The interface port counts as an input because its modport is a sink.
+    # The interface port is an input, because its modport is a sink.
     assert mod.n_inputs == 4
     assert mod.n_outputs == 1
     assert [p.name for p in mod.clocks] == ["clk_i"]

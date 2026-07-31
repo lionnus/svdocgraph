@@ -1,14 +1,10 @@
-"""SVDocGraph command-line interface.
+"""The command-line interface.
 
-Designed to feel like ``cargo doc`` / ``mkdocs`` for Bender-based SystemVerilog:
-install the tool once, then run it inside any bender project with no arguments and
-it discovers everything itself.
+The user installs the tool one time and then runs it in a Bender project. The tool
+finds the project data without options.
 
-  svdocgraph gen [PATH]       generate the docs into ./.svdocgraph
-  svdocgraph open [PATH]      open the generated docs (building them if needed)
-  svdocgraph serve [PATH]     generate, then serve over http
-  svdocgraph init [PATH]      add a svdocgraph.yml and a .gitignore rule
-  svdocgraph dump [PATH]      emit the extracted design model as JSON
+Exit codes: 1 no modules, 2 the output directory has other files, 3 a necessary
+program is not available, 4 bender failed.
 """
 
 from __future__ import annotations
@@ -47,15 +43,15 @@ def _err(msg: str) -> None:
 
 
 class Ctx:
-    """Resolved project root, config and output directory for one invocation."""
+    """The project root, the settings and the output directory for one command."""
 
     def __init__(self, args, use_output: bool = True):
         self.root, found = project.find_project_root(args.path)
         if not found:
-            _warn(f"No Bender.yml found in {os.path.abspath(args.path)} or its parents; "
-                  "continuing with that directory as the project root.")
+            _warn(f"No Bender.yml in {os.path.abspath(args.path)} or in its parents. "
+                  "The tool uses that directory as the project root.")
         self.config = project.load_config(self.root)
-        # `dump` writes a JSON file, not a site: its -o is not an output directory.
+        # The `-o` option of `dump` gives a file, not a directory.
         out = (getattr(args, "output", None) if use_output else None) or self.config.output
         self.outdir = out if os.path.isabs(out) else os.path.join(self.root, out)
         self.outdir = os.path.abspath(self.outdir)
@@ -69,13 +65,13 @@ class Ctx:
 
 
 class BenderFailed(Exception):
-    """bender could not describe the project; its message is the payload."""
+    """bender could not describe the project. The message comes from bender."""
 
 
 def _build_design(ctx: Ctx):
     _log(f"Project: {ctx.root}")
     if ctx.config.found:
-        _log(f"Config:  {os.path.relpath(ctx.config.path, ctx.root)}")
+        _log(f"Settings: {os.path.relpath(ctx.config.path, ctx.root)}")
     info = bender.collect(ctx.root)
     if info.failure:
         raise BenderFailed(info.failure)
@@ -83,54 +79,49 @@ def _build_design(ctx: Ctx):
         _log(f"Bender root package: \033[1m{info.root_package}\033[0m "
              f"({len(info.root_files)} source files, {len(info.packages)} deps)")
     else:
-        _warn("No bender root package detected (is there a Bender.yml?).")
+        _warn("No bender root package. Make sure that Bender.yml gives a name.")
 
     with tempfile.TemporaryDirectory() as td:
         cmd_file = bender.write_command_file(info, os.path.join(td, "sources.f")) or ""
-        _log("Elaborating with slang …")
+        _log("Elaboration with slang …")
         design = extract.extract_design(ctx.root, info, cmd_file, extra_tops=ctx.tops)
 
-    _ok(f"Extracted {len(design.modules)} modules "
-        f"({sum(1 for m in design.modules.values() if m.package == design.root_package)} owned), "
-        f"{len(design.tops)} tops")
+    _ok(f"{len(design.modules)} modules "
+        f"({sum(1 for m in design.modules.values() if m.package == design.root_package)} "
+        f"in the root package), {len(design.tops)} tops")
     for d in design.diagnostics[:8]:
         _warn(d)
     return design
 
 
 def _bender_failed(exc: Exception) -> None:
-    """Report a bender failure with bender's own words, not a generic message."""
+    """Shows the message from bender."""
     _err("bender could not describe this project:")
     for line in str(exc).splitlines():
         print(f"    {line}", file=sys.stderr)
-    _err("Fix the bender setup first - `bender checkout` usually reports the same "
-         "problem. Nothing was written.")
+    _err("Correct the bender setup first. `bender checkout` shows the same "
+         "problem. The tool wrote no files.")
 
 
 def _preflight() -> int:
-    """Fail fast on missing external tools, instead of rendering an empty site."""
-    for dep in deps.missing_required():
-        _err(f"{dep.name}: {dep.detail}")
-        if dep.hint:
-            for line in dep.hint.splitlines():
-                print(f"  {line}", file=sys.stderr)
-    if deps.missing_required():
-        return 3
-    for dep in deps.optional_gaps():
-        _warn(f"{dep.name}: {dep.detail}")
-        if dep.hint:
-            _warn(dep.hint)
-    return 0
+    """Stops before the elaboration if a necessary program is not available."""
+    missing = [d for d in deps.check_all() if not d.ok]
+    for dep in missing:
+        report = _err if dep.required else _warn
+        report(f"{dep.name}: {dep.detail}")
+        for line in dep.hint.splitlines():
+            report(f"  {line}")
+    return 3 if any(d.required for d in missing) else 0
 
 
 def _generate(ctx: Ctx, force: bool) -> int:
-    """Extract and render. Returns a process exit code."""
+    """Elaborates the design and writes the pages. Gives the exit code."""
     rc = _preflight()
     if rc:
         return rc
     if not force and not project.is_ours(ctx.outdir):
-        _err(f"{ctx.rel_out} is not empty and was not generated by SVDocGraph.")
-        _err("Refusing to overwrite it. Pass --force, or pick another -o directory.")
+        _err(f"{ctx.rel_out} contains files that this tool did not write.")
+        _err("Use --force to replace them, or use -o to select a different directory.")
         return 2
 
     try:
@@ -139,26 +130,26 @@ def _generate(ctx: Ctx, force: bool) -> int:
         _bender_failed(exc)
         return 4
     if not design.modules:
-        _err("No modules extracted - nothing to render.")
+        _err("The tool found no modules. It wrote no pages.")
         return 1
 
-    _log(f"Rendering → {ctx.rel_out}")
+    _log(f"Pages → {ctx.rel_out}")
     render_site(design, ctx.outdir, title=ctx.config.name)
 
     if ctx.is_default_output:
         touched = project.ensure_gitignored(ctx.outdir)
         if touched:
-            _log(f"Added {os.path.basename(ctx.outdir)}/ to "
+            _log(f"Added {os.path.basename(ctx.outdir)}/ to the "
                  f"{os.path.relpath(touched, os.getcwd())}")
 
-    _ok(f"Docs ready in \033[1m{ctx.rel_out}\033[0m")
-    _log(f"Open with: svdocgraph open   ({project.index_url(ctx.outdir)})")
+    _ok(f"The documentation is ready in \033[1m{ctx.rel_out}\033[0m")
+    _log(f"To open it: svdocgraph open   ({project.index_url(ctx.outdir)})")
     return 0
 
 
 def _open_browser(url: str) -> None:
     if not webbrowser.open(url):
-        _warn(f"Could not launch a browser. Open this URL manually:\n  {url}")
+        _warn(f"The tool cannot start a browser. Open this URL manually:\n  {url}")
 
 
 # -- commands --------------------------------------------------------------
@@ -176,14 +167,14 @@ def cmd_open(args) -> int:
     ctx = Ctx(args)
     index = os.path.join(ctx.outdir, "index.html")
     if not os.path.isfile(index):
-        _log("No docs generated yet - building them first.")
+        _log("There is no documentation. The tool makes it first.")
         rc = _generate(ctx, args.force)
         if rc != 0:
             return rc
     else:
         info = project.read_build_info(ctx.outdir) or {}
         when = info.get("generated_at")
-        _log(f"Opening {ctx.rel_out}" + (f" (generated {when})" if when else ""))
+        _log(f"Open {ctx.rel_out}" + (f" (made {when})" if when else ""))
     _open_browser(project.index_url(ctx.outdir))
     return 0
 
@@ -208,7 +199,7 @@ def cmd_serve(args) -> int:
         return 1
     with httpd:
         url = f"http://localhost:{args.port}/"
-        _ok(f"Serving at \033[1m{url}\033[0m  (Ctrl-C to stop)")
+        _ok(f"Server at \033[1m{url}\033[0m . Push Ctrl-C to stop.")
         if args.open:
             _open_browser(url)
         try:
@@ -221,20 +212,20 @@ def cmd_serve(args) -> int:
 def cmd_init(args) -> int:
     root, found = project.find_project_root(args.path)
     if not found:
-        _warn(f"No Bender.yml in {os.path.abspath(args.path)} or its parents - "
-              "svdocgraph is meant to run from a bender project root.")
+        _warn(f"No Bender.yml in {os.path.abspath(args.path)} or in its parents. "
+              "Run this command in a Bender project.")
     cfg = project.write_config(root)
     if cfg:
         _ok(f"Wrote {os.path.relpath(cfg, os.getcwd())}")
     else:
-        _log("Config already exists; left it untouched.")
+        _log("The settings file already exists. The tool did not change it.")
     touched = project.ensure_gitignored(os.path.join(root, project.DEFAULT_OUTPUT))
     if touched:
         _ok(f"Added {project.DEFAULT_OUTPUT}/ to {os.path.relpath(touched, os.getcwd())}")
     print(
         "\nNext:\n"
-        "  svdocgraph gen --open      generate the docs and open them\n"
-        "\nTo wire it into a Makefile:\n"
+        "  svdocgraph gen --open      make the documentation and open it\n"
+        "\nTo call the tool from a Makefile:\n"
         "  .PHONY: docs\n"
         "  docs:\n"
         "  \tsvdocgraph gen\n",
@@ -244,7 +235,7 @@ def cmd_init(args) -> int:
 
 
 def cmd_doctor(args) -> int:
-    """Report on everything svdocgraph needs to run."""
+    """Shows the status of each necessary program."""
     checks = deps.check_all()
     width = max(len(d.name) for d in checks)
     bad = False
@@ -257,9 +248,9 @@ def cmd_doctor(args) -> int:
             for line in d.hint.splitlines():
                 print(f"  {line}")
     if bad:
-        print("\nsvdocgraph cannot run until the items marked ✗ are installed.")
+        print("\nInstall the items with ✗ before you run the tool.")
         return 3
-    print("\nAll good - run `svdocgraph gen` from a bender project root.")
+    print("\nAll the necessary programs are available. Run `svdocgraph gen`.")
     return 0
 
 
@@ -294,8 +285,8 @@ def main(argv=None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     def common(sp, output: bool = True):
-        # Accept --quiet on either side of the subcommand. SUPPRESS keeps the
-        # subparser from resetting a --quiet given before the subcommand.
+        # The user can put --quiet before or after the command name. SUPPRESS
+        # keeps the value from the first position.
         sp.add_argument("-q", "--quiet", action="store_true", default=argparse.SUPPRESS,
                         help="only print warnings and errors")
         sp.add_argument("path", nargs="?", default=".",
@@ -330,7 +321,7 @@ def main(argv=None) -> int:
     i.add_argument("path", nargs="?", default=".", help="project root (default: .)")
     i.set_defaults(func=cmd_init)
 
-    doc = sub.add_parser("doctor", help="check bender, Graphviz and pyslang")
+    doc = sub.add_parser("doctor", help="show the status of the necessary programs")
     doc.set_defaults(func=cmd_doctor)
 
     d = sub.add_parser("dump", help="emit the extracted design model as JSON")

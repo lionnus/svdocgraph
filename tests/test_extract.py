@@ -1,8 +1,9 @@
-"""Extractor helpers that do not need a slang elaboration."""
+"""The extractor functions that operate without an elaboration."""
 
 from __future__ import annotations
 
 from svdocgraph import extract
+from svdocgraph.bender import BenderInfo
 
 RTL = "tests/fixtures/demo/rtl"
 
@@ -82,3 +83,41 @@ def test_direction_strings_are_normalised():
     assert extract._dir_str("ArgumentDirection.In") == "in"
     assert extract._dir_str("ArgumentDirection.InOut") == "inout"
     assert extract._dir_str("ArgumentDirection.Ref") == "ref"
+
+
+def test_header_doc_stops_at_a_blank_line(tmp_path):
+    f = tmp_path / "m.sv"
+    f.write_text("// Not part of the header.\n\n// The description.\nmodule m ();\nendmodule\n")
+    assert extract._header_doc(str(f), "m") == "The description."
+
+
+def test_header_doc_ignores_an_unreadable_file():
+    assert extract._header_doc("/nonexistent/m.sv", "m") == ""
+
+
+def test_extraction_needs_pyslang(monkeypatch):
+    monkeypatch.setattr(extract, "HAVE_PYSLANG", False)
+    design = extract.extract_design("/tmp", BenderInfo(), "sources.f")
+    assert design.modules == {}
+    assert "pyslang" in design.diagnostics[0]
+
+
+def test_extraction_needs_a_command_file():
+    design = extract.extract_design("/tmp", BenderInfo(), "")
+    assert design.modules == {}
+    assert "command file" in design.diagnostics[0]
+
+
+def test_extraction_reports_a_command_file_slang_refuses(tmp_path):
+    """slang stops if the file list gives a file that is not available."""
+    cmd = tmp_path / "sources.f"
+    cmd.write_text(f"{tmp_path}/does_not_exist.sv\n")
+    design = extract.extract_design(str(tmp_path), BenderInfo(), str(cmd))
+    assert design.modules == {}
+    assert any("slang" in d for d in design.diagnostics)
+
+
+def test_header_doc_stops_at_a_line_of_code(tmp_path):
+    f = tmp_path / "m.sv"
+    f.write_text("`define X 1\n// The description.\nmodule m ();\nendmodule\n")
+    assert extract._header_doc(str(f), "m") == "The description."

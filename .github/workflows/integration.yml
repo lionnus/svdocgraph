@@ -1,17 +1,15 @@
 name: integration
 
-# Generate documentation for real PULP Platform designs with real bender.
+# Makes documentation for real PULP Platform designs with the true bender.
 #
-# The unit tests drive a stub bender against a four-file fixture; that catches
-# regressions in the CLI and the renderer, but not in the part that matters most:
-# elaborating a large third-party design whose sources, include dirs and defines
-# come from an actual bender resolve.
+# The unit tests use a substitute for bender and a small design. They find the
+# faults in the command-line interface and in the renderer. They cannot find a
+# fault in the elaboration of a large design.
 #
-# Designs are pinned to a tag or commit so a run is reproducible and an upstream RTL
-# change can never turn a pull request red. Bumping a pin is a deliberate commit.
-# The weekly run keeps the pinned designs honest against everything that *does*
-# float: a new bender release, a new pyslang within the supported range, a new
-# Graphviz, a new Ubuntu image.
+# Each design has a fixed tag or commit. Thus each run gives the same result, and
+# a change in a design cannot cause a failure in a pull request. The weekly run
+# finds a failure that a new version of bender, pyslang, Graphviz or the runner
+# image causes.
 
 on:
   push:
@@ -36,8 +34,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # An outer-product engine with 14 bender dependencies: a deep package
-          # graph, floating-point units from cvfpu, and HCI/hwpe-stream interfaces.
+          # An outer-product engine with 14 dependencies. It has floating-point
+          # units from cvfpu, and HCI and hwpe-stream interfaces.
           - name: opope
             repo: pulp-platform/opope
             ref: 76e544bab5f821a199f5f82b80b8ad483bfaaa8f
@@ -50,10 +48,8 @@ jobs:
               --want-module opope_engine
               --want-module opope_streamer
               --want-module opope_tiler
-          # An HWPE accelerator: the streaming/interface style this tool exists
-          # for - hwpe-stream, HCI and hwpe-ctrl interfaces wiring an engine to a
-          # streamer, with most units coming from dependencies rather than the
-          # root package.
+          # An HWPE accelerator. The hwpe-stream, HCI and hwpe-ctrl interfaces
+          # connect an engine to a streamer. Most modules come from a dependency.
           - name: datamover
             repo: pulp-platform/datamover
             ref: f14d4db2a72c08b43b3511013e821a4600f6ef56
@@ -85,8 +81,8 @@ jobs:
           sudo tar xzf /tmp/bender.tar.gz -C /usr/local/bin bender
           bender --version
 
-      - name: Install svdocgraph from the built wheel
-        # Install the artefact users install, not the source tree.
+      - name: Install svdocgraph from the wheel
+        # Use the wheel that a user installs, not the source directory.
         run: |
           uv build
           uv tool install --force dist/*.whl

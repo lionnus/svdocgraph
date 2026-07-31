@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Smoke-check a generated SVDocGraph site.
+"""Examines a documentation directory that the tool made.
 
-Used by the integration workflow to assert that a run against a real design
-produced something meaningful, rather than an empty-but-successful site. Also
-handy by hand:
+The integration workflow uses this script. It makes sure that a run against a real
+design gave the expected result, and not an empty site. You can also use it
+manually:
 
     python scripts/check_site.py .svdocgraph --min-modules 50 --want-interface AXI_BUS
 """
@@ -23,17 +23,17 @@ INLINE_INDEX = re.compile(
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("site", type=Path, help="generated site directory")
+    ap.add_argument("site", type=Path, help="the documentation directory")
     ap.add_argument("--min-modules", type=int, default=1)
     ap.add_argument("--min-interfaces", type=int, default=0)
     ap.add_argument("--want-module", action="append", default=[],
-                    help="module that must be present (repeatable)")
+                    help="a module that must be in the result (repeatable)")
     ap.add_argument("--want-interface", action="append", default=[],
-                    help="unit that must be classified as an interface (repeatable)")
+                    help="a unit that must be an interface (repeatable)")
     ap.add_argument("--max-diagnostics", type=int, default=None,
-                    help="fail if the design carries more diagnostics than this")
+                    help="the maximum number of diagnostics")
     ap.add_argument("--require-graphs", action="store_true",
-                    help="fail unless the hierarchy page contains an inline SVG")
+                    help="the hierarchy page must contain an SVG")
     args = ap.parse_args(argv)
 
     site: Path = args.site
@@ -75,13 +75,13 @@ def main(argv=None) -> int:
             problems.append(f"{len(diags)} diagnostics (max {args.max_diagnostics}): "
                             + "; ".join(diags[:5]))
 
-        # Every extracted unit must have a page.
+        # Each unit must have a page.
         for name in modules:
             if not (site / f"module-{name}.html").is_file():
                 problems.append(f"no page for module {name}")
                 break
 
-        # Ports and parameters should actually be resolved, not empty shells.
+        # The ports must be resolved, and not empty.
         with_ports = sum(1 for m in modules.values() if m.get("ports"))
         if modules and with_ports < len(modules) // 2:
             problems.append(f"only {with_ports}/{len(modules)} units have ports")

@@ -2,7 +2,7 @@
 
 [![ci](https://github.com/lionnus/svdocgraph/actions/workflows/ci.yml/badge.svg)](https://github.com/lionnus/svdocgraph/actions/workflows/ci.yml)
 [![integration](https://github.com/lionnus/svdocgraph/actions/workflows/integration.yml/badge.svg)](https://github.com/lionnus/svdocgraph/actions/workflows/integration.yml)
-[![coverage](https://img.shields.io/badge/coverage-%E2%89%A590%25-brightgreen)](#development)
+[![coverage](https://img.shields.io/badge/coverage-%E2%89%A595%25-brightgreen)](#development)
 [![python](https://img.shields.io/badge/python-3.9%20%E2%80%93%203.13-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
@@ -165,7 +165,7 @@ Bender.yml / Bender.lock
 
 ```sh
 uv sync --extra dev
-uv run pytest                  # 129 tests
+uv run pytest                  # 152 tests
 uv run pytest --cov            # tests with the coverage report
 uv run ruff check .
 ```
@@ -174,7 +174,7 @@ The tests use a small design in `tests/fixtures/demo` and a substitute for `bend
 Thus an installation of `bender` is not necessary, and the tests operate on each
 platform.
 
-Coverage is 92% of the statements and the branches. The minimum value is in
+Coverage is 97% of the statements and the branches. The minimum value is in
 `pyproject.toml`. CI stops with an error if the coverage becomes less than this
 minimum. Do not decrease the minimum to make a failed job pass.
 

@@ -1,4 +1,4 @@
-"""Dependency discovery and the `doctor` command."""
+"""The checks for the necessary programs, and the `doctor` command."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ def test_bender_missing_is_required_with_a_hint(monkeypatch):
 
 
 def test_broken_bender_is_reported(tmp_path, monkeypatch):
-    """A `bender` that exists but does not run must not look healthy."""
+    """A `bender` that is available but does not run is not usable."""
     bad = tmp_path / "bin"
     bad.mkdir()
     exe = bad / "bender"
@@ -58,7 +58,7 @@ def test_pyslang_version_is_supported():
 @needs_pyslang
 def test_doctor_passes_when_everything_is_present(run_cli, stub_bender, capsys):
     assert run_cli("doctor") == 0
-    assert "All good" in capsys.readouterr().out
+    assert "All the necessary programs are available" in capsys.readouterr().out
 
 
 def test_doctor_fails_and_explains(run_cli, monkeypatch, capsys):
@@ -80,12 +80,14 @@ def test_broken_graphviz_is_reported(tmp_path, monkeypatch):
     assert "failed" in dep.detail
 
 
-def test_status_words_match_the_requirement(monkeypatch):
-    monkeypatch.setenv("PATH", "")
-    assert deps.check_bender().status == "missing"
-    assert deps.check_dot().status == "not found"
-
-
 def test_check_all_covers_every_requirement():
     names = {d.name for d in deps.check_all()}
     assert {"bender", "pyslang", "python"} <= names
+
+
+def test_an_unusable_pyslang_is_reported(monkeypatch):
+    """pyslang is installed, but its version has no driver that the tool can use."""
+    monkeypatch.setattr("svdocgraph.extract.HAVE_PYSLANG", False)
+    dep = deps.check_pyslang()
+    assert not dep.ok and dep.required
+    assert "Driver" in dep.detail

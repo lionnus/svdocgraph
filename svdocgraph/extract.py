@@ -1,25 +1,20 @@
-"""Design extraction via slang (pyslang).
+"""Elaborates the design with slang and makes the design model.
 
-We use the *same* slang library that the standalone compiler uses, but drive it
-in-process through pyslang so we can walk the elaborated AST directly instead of
-serialising a multi-gigabyte JSON dump.
+The tool drives slang in the same process through pyslang. Thus it reads the
+elaborated tree directly.
 
-Strategy
---------
-1.  Ask bender for the full source set + include dirs + defines (a slang command
-    file) and for the set of files owned by the *root* package.
-2.  Cheaply regex the names of the modules/interfaces declared in those owned
-    files - these are the units we want to document, and we hand them to slang as
-    ``--top`` so each one elaborates (resolving macros, parameters and widths)
-    even when it is never instantiated in the default build.
-3.  Elaborate once, then walk every top's instance tree, capturing one elaborated
-    ``Module`` per definition we encounter (owned modules *and* the dependency
-    modules they reach).
-4.  Any owned module slang could not elaborate falls back to a light syntactic
-    extraction so it still shows up in the docs.
+The sequence is:
 
-The whole thing is defensive: a missing tech-cell or an un-elaboratable module
-produces a diagnostic, never a crash.
+1. Read the source set and the files of the root package from bender.
+2. Find the module names in those files with a regular expression. Give these
+   names to slang as tops. Thus each module elaborates, also a module that no
+   other module instantiates.
+3. Elaborate one time. Then walk the instance tree of each top and make one
+   Module for each definition.
+4. If slang cannot elaborate a module of the root package, make a page from the
+   source text only.
+
+A module that fails gives a diagnostic. It does not stop the run.
 """
 
 from __future__ import annotations
@@ -30,10 +25,9 @@ import re
 from .bender import BenderInfo
 from .model import Design, Instance, Module, Param, Port, PortConn
 
-# `Driver` lives in `pyslang.driver` since pyslang 11; earlier releases expose a
-# `pyslang.Driver` with a different command-line API that this extractor cannot
-# drive. Accept both so the version check below can report the real reason instead
-# of quietly producing an empty design.
+# The `Driver` class is in `pyslang.driver` from pyslang 11. An older version has
+# a different class that this tool cannot drive. `deps.check_pyslang` gives the
+# message for that condition.
 try:
     from pyslang.driver import Driver
     HAVE_PYSLANG = True
@@ -42,7 +36,7 @@ except ImportError:  # pragma: no cover - depends on the installed pyslang
     HAVE_PYSLANG = False
 
 
-# --- lightweight syntactic helpers -----------------------------------------
+# --- Functions that read the source text ------------------------------------
 
 _DECL_RE = re.compile(
     r"^\s*(?P<kind>module|interface|package|program)\s+(?:automatic\s+|static\s+)?"
@@ -52,7 +46,7 @@ _DECL_RE = re.compile(
 
 
 def declared_units(files: list[str]) -> dict[str, tuple[str, str]]:
-    """Return {name: (kind, file)} for units declared in *files* (regex scan)."""
+    """Finds the modules in the files. Gives {name: (kind, file)}."""
     out: dict[str, tuple[str, str]] = {}
     for f in files:
         try:
@@ -66,7 +60,7 @@ def declared_units(files: list[str]) -> dict[str, tuple[str, str]]:
 
 
 def _header_doc(file: str, name: str) -> str:
-    """Grab a leading ``//`` comment block immediately above ``module <name>``."""
+    """Reads the `//` comment lines immediately above the module declaration."""
     try:
         with open(file, errors="replace") as fh:
             lines = fh.readlines()
@@ -82,7 +76,7 @@ def _header_doc(file: str, name: str) -> str:
         s = lines[j].strip()
         if s.startswith("//"):
             body = s[2:].strip()
-            # skip license/SPDX boilerplate
+            # Do not use the licence lines.
             if body and not re.match(r"(copyright|spdx|licen|http|---)", body, re.I):
                 doc.append(body)
             j -= 1
@@ -93,7 +87,7 @@ def _header_doc(file: str, name: str) -> str:
     return " ".join(reversed(doc))[:300]
 
 
-# --- pyslang AST helpers ----------------------------------------------------
+# --- Functions that read the elaborated tree --------------------------------
 
 def _dir_str(direction) -> str:
     s = str(direction).split(".")[-1].lower()
@@ -105,16 +99,11 @@ def _kind(sym) -> str:
 
 
 def _direct_instances(body) -> list:
-    """Direct child instances of a body, descending generate blocks but *not*
-    descending into the instances themselves."""
+    """The child instances of a module. Includes the generate blocks."""
     found: list = []
 
     def walk(scope):
-        try:
-            members = list(scope)
-        except TypeError:
-            return
-        for m in members:
+        for m in scope:
             k = _kind(m)
             if k == "InstanceSymbol":
                 found.append(m)
@@ -157,12 +146,10 @@ def _port_from_symbol(p) -> Port | None:
 
 
 def _conn_info(pc, sm) -> tuple[str, str, bool]:
-    """Return (net, modport, is_interface) for a port connection.
+    """Gives (net, modport, is_interface) for one port connection.
 
-    For interface ports slang exposes the connected interface instance and its
-    modport via ``ifaceConn`` as ``(InstanceSymbol, ModportSymbol)``; the instance
-    name is the wire we want (a stream / bus), and the modport gives its
-    direction. For ordinary ports we read the connected expression.
+    For an interface port, slang gives the connected instance and the modport in
+    `ifaceConn`. For a usual port, the tool reads the connected expression.
     """
     port = getattr(pc, "port", None)
     expr = getattr(pc, "expression", None)
@@ -175,20 +162,19 @@ def _conn_info(pc, sm) -> tuple[str, str, bool]:
                 modport = getattr(ic[1], "name", "") or ""
             if ic[0] is not None:
                 fallback = getattr(ic[0], "name", "") or ""
-        # Prefer the source text: it is the real wire/port name. The ifaceConn
-        # instance is named after the interface type when the connection is the
-        # parent's own boundary port, which would merge unrelated streams.
+        # Use the source text first. It has the true net name. `ifaceConn` gives
+        # the name of the interface type for a boundary port. That name would
+        # make one net from two different streams.
         return _net_text(expr, sm) or fallback, modport, True
     return _net_text(expr, sm), "", False
 
 
 def _net_text(expr, sm) -> str:
-    """The connected net of a port expression, as written in the source.
+    """The connected net, as written in the source.
 
-    Output ports wrap the connection in an assignment whose left side is the
-    external net, so we follow it. For everything else we read the expression's
-    own source range, which also recovers bit-selects and array elements that
-    have no syntax node after elaboration.
+    slang puts the connection of an output port in an assignment. The external
+    net is on one side of it. For the other ports the tool reads the source range
+    of the expression. Thus a bit-select keeps its index.
     """
     if expr is None:
         return ""
@@ -217,22 +203,15 @@ def _instance_from_symbol(inst, sm) -> Instance:
     module = defn.name if defn is not None else getattr(body, "name", "?")
     is_iface = "interface" in str(getattr(defn, "definitionKind", "")).lower()
     params: dict[str, str] = {}
-    try:
-        for p in body.parameters:
-            if getattr(p, "isLocal", False):
-                continue
+    for p in body.parameters:
+        if not getattr(p, "isLocal", False):
             params[p.name] = str(getattr(p, "value", ""))
-    except Exception:
-        pass
     conns: list[PortConn] = []
-    try:
-        for pc in (inst.portConnections or []):
-            port = getattr(pc, "port", None)
-            pname = getattr(port, "name", "") if port is not None else ""
-            net, modport, is_if = _conn_info(pc, sm)
-            conns.append(PortConn(port=pname, net=net, is_interface=is_if, modport=modport))
-    except Exception:
-        pass
+    for pc in (inst.portConnections or []):
+        port = getattr(pc, "port", None)
+        pname = getattr(port, "name", "") if port is not None else ""
+        net, modport, is_if = _conn_info(pc, sm)
+        conns.append(PortConn(port=pname, net=net, is_interface=is_if, modport=modport))
     return Instance(
         name=inst.name, module=module, params=params, conns=conns,
         is_interface=is_iface,
@@ -240,7 +219,7 @@ def _instance_from_symbol(inst, sm) -> Instance:
 
 
 def _collapse_instances(raw: list[Instance]) -> list[Instance]:
-    """Collapse generate-loop / array copies that share a name+module."""
+    """Makes one instance from the copies that a generate loop or an array makes."""
     out: dict[tuple[str, str], Instance] = {}
     order: list[tuple[str, str]] = []
     for inst in raw:
@@ -255,10 +234,9 @@ def _collapse_instances(raw: list[Instance]) -> list[Instance]:
 
 
 def _definition_kind(defn) -> str:
-    """"module" / "interface" / "program" for an elaborated definition symbol.
+    """The kind of an elaborated definition: module, interface or program.
 
-    slang reports this as ``DefinitionKind.Module`` etc.; without it every
-    elaborated interface would be presented as a module.
+    Without this, the tool shows each interface as a module.
     """
     raw = getattr(defn, "definitionKind", None)
     name = getattr(raw, "name", "") or str(raw).rsplit(".", 1)[-1]
@@ -270,7 +248,7 @@ def _module_from_body(body, sm) -> Module:
     defn = getattr(body, "definition", None)
     name = defn.name if defn is not None else body.name
     mod = Module(name=name, kind=_definition_kind(defn), elaborated=True)
-    # location / provenance
+    # The file and the line
     loc = getattr(defn, "location", None)
     if loc is not None and sm is not None:
         try:
@@ -278,43 +256,30 @@ def _module_from_body(body, sm) -> Module:
             mod.line = sm.getLineNumber(loc)
         except Exception:
             pass
-    # ports
-    try:
-        for p in body.portList:
-            port = _port_from_symbol(p)
-            if port is not None:
-                mod.ports.append(port)
-    except Exception:
-        pass
-    # parameters
-    try:
-        for p in body.parameters:
-            mod.params.append(
-                Param(
-                    name=p.name,
-                    value=str(getattr(p, "value", "")),
-                    is_localparam=bool(getattr(p, "isLocal", False)),
-                )
+    for p in body.portList:
+        port = _port_from_symbol(p)
+        if port is not None:
+            mod.ports.append(port)
+    for p in body.parameters:
+        mod.params.append(
+            Param(
+                name=p.name,
+                value=str(getattr(p, "value", "")),
+                is_localparam=bool(getattr(p, "isLocal", False)),
             )
-    except Exception:
-        pass
-    # imports (wildcard package imports)
-    try:
-        for m in body:
-            if _kind(m) == "WildcardImportSymbol":
-                pkg = getattr(m, "package", None)
-                pname = getattr(pkg, "name", "") if pkg is not None else ""
-                if pname and pname not in mod.imports:
-                    mod.imports.append(pname)
-    except Exception:
-        pass
-    # child instances
+        )
+    for m in body:
+        if _kind(m) == "WildcardImportSymbol":
+            pkg = getattr(m, "package", None)
+            pname = getattr(pkg, "name", "") if pkg is not None else ""
+            if pname and pname not in mod.imports:
+                mod.imports.append(pname)
     raw = [_instance_from_symbol(i, sm) for i in _direct_instances(body)]
     mod.instances = _collapse_instances(raw)
     return mod
 
 
-# --- main entry -------------------------------------------------------------
+# --- The main function ------------------------------------------------------
 
 def extract_design(
     project_root: str,
@@ -327,12 +292,12 @@ def extract_design(
 
     if not HAVE_PYSLANG:
         design.diagnostics.append(
-            "pyslang is missing or too old (need >=11); cannot extract design. "
-            "Run `svdocgraph doctor`."
+            "pyslang is not available, or its version is too old. The tool needs "
+            "version 11. Run `svdocgraph doctor`."
         )
         return design
     if not cmd_file or not os.path.exists(cmd_file):
-        design.diagnostics.append("No slang command file (bender flist missing).")
+        design.diagnostics.append("No slang command file. bender gave no file list.")
         return design
 
     owned = declared_units(bender.root_files)
@@ -343,21 +308,21 @@ def extract_design(
     driver.addStandardArgs()
     top_args = " ".join(f"--top {t}" for t in tops)
     cmd = (
-        f"slang -f {cmd_file} {top_args} "
+        f'slang -f "{cmd_file}" {top_args} '
         "--ignore-unknown-modules --allow-toplevel-iface-ports "
         "--error-limit=0 --max-instance-array 4096"
     )
     if not driver.parseCommandLine(cmd):
-        design.diagnostics.append("slang: failed to parse command line.")
+        design.diagnostics.append("slang did not accept the command line.")
         return design
     if not driver.processOptions():
-        design.diagnostics.append("slang: failed to process options.")
+        design.diagnostics.append("slang did not accept the options or the file list.")
         return design
     driver.parseAllSources()
     comp = driver.createCompilation()
     sm = comp.sourceManager
 
-    # Walk every top's instance tree, capturing one elaborated module per def.
+    # Walk the instance tree of each top. Keep one module for each definition.
     seen: set[str] = set()
 
     def visit(sym):
@@ -369,7 +334,7 @@ def extract_design(
                 seen.add(dname)
                 try:
                     design.modules[dname] = _module_from_body(body, sm)
-                except Exception as exc:  # keep going on a single bad module
+                except Exception as exc:  # One bad module must not stop the run
                     design.diagnostics.append(f"extract {dname}: {exc}")
 
     root = comp.getRoot()
@@ -379,13 +344,13 @@ def extract_design(
         except Exception as exc:
             design.diagnostics.append(f"visit {top.name}: {exc}")
 
-    # Fallback: owned modules slang never elaborated still deserve a stub page.
+    # A module of the root package that slang did not elaborate keeps a page.
     for name in owned_modules:
         if name not in design.modules:
             kind, file = owned[name]
             design.modules[name] = Module(
                 name=name, kind=kind, file=os.path.realpath(file), elaborated=False,
-                desc="(not elaborated - shown from source only)",
+                desc="(not elaborated - from the source text only)",
             )
 
     _annotate(design, bender, owned)
@@ -393,17 +358,17 @@ def extract_design(
 
 
 def _annotate(design: Design, bender: BenderInfo, owned: dict) -> None:
-    """Fill provenance, package map, doc comments, and reverse-instantiation."""
+    """Adds the origin, the package, the comments and the parent modules."""
     design.packages = bender.packages
     for name, mod in design.modules.items():
-        # provenance
+        # The origin of the module
         if mod.file:
             mod.package = bender.file_to_package.get(mod.file, "")
             if mod.file.startswith(design.project_root):
                 mod.rel_file = os.path.relpath(mod.file, design.project_root)
         if not mod.package and name in owned:
             mod.package = bender.root_package
-        # doc comment
+        # The comment above the declaration
         if mod.file and not mod.desc.startswith("("):
             doc = _header_doc(mod.file, name)
             if doc:

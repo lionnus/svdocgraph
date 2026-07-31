@@ -57,9 +57,9 @@ branch = true
 [tool.coverage.report]
 precision = 1
 show_missing = true
-# The floor CI enforces, and the number on the README badge. Raise it when the
-# suite grows; never lower it to make a red build green.
-fail_under = 90
+# The minimum that CI enforces. It is also the number on the README badge.
+# Increase it when the tests increase. Do not decrease it to pass a failed job.
+fail_under = 95
 exclude_also = [
   "if TYPE_CHECKING:",
   "raise NotImplementedError",

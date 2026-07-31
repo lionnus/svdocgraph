@@ -1,4 +1,4 @@
-"""Bender integration: what is read from bender, and how failures are reported."""
+"""The bender layer: the data that it reads, and the messages on a failure."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ def test_missing_lockfile_is_not_an_error(tmp_path):
 
 
 def test_nested_source_groups_are_flattened(tmp_path):
-    """`bender sources` nests dependency groups; every file must map to a package."""
+    """`bender sources` puts the groups in each other. Each file needs a package."""
     a = tmp_path / "a.sv"
     b = tmp_path / "b.sv"
     a.touch()
@@ -105,16 +105,64 @@ def test_collect_without_bender_is_not_fatal(project_dir, monkeypatch):
 def test_collect_reads_the_source_set(project_dir, stub_bender):
     info = bender.collect(str(project_dir))
     assert info.root_package == "demo_ip"
-    assert info.flist_plus.count(".sv") == 4
-    assert len(info.root_files) == 4
+    assert info.flist_plus.count(".sv") == 5
+    assert len(info.root_files) == 5
     assert info.packages["demo_ip"].root is True
 
 
 def test_command_file_is_written_for_slang(project_dir, stub_bender, tmp_path):
     info = bender.collect(str(project_dir))
     path = bender.write_command_file(info, str(tmp_path / "sources.f"))
-    assert path and open(path).read() == info.flist_plus
+    assert path
+    written = open(path).read()
+    assert written.count(".sv") == 5
+    assert all(ln.startswith('"') for ln in written.splitlines())
 
 
 def test_no_command_file_without_a_source_list(tmp_path):
     assert bender.write_command_file(bender.BenderInfo(), str(tmp_path / "x.f")) is None
+
+
+def _fake_bender(tmp_path, monkeypatch, sources_body: str):
+    """A bender that gives a file list, and that behaves as given for `sources`."""
+    bindir = tmp_path / "bin"
+    bindir.mkdir(exist_ok=True)
+    exe = bindir / "bender"
+    exe.write_text(
+        "#!/bin/sh\n"
+        '[ "$1 $2" = "script flist-plus" ] && { echo "/tmp/x.sv"; exit 0; }\n'
+        f'[ "$1 $2" = "sources -f" ] && {{ {sources_body} }}\n'
+        "exit 1\n"
+    )
+    exe.chmod(0o755)
+    monkeypatch.setenv("PATH", str(bindir))
+
+
+def test_a_failing_sources_command_only_removes_the_package_data(project_dir, tmp_path,
+                                                                 monkeypatch):
+    _fake_bender(tmp_path, monkeypatch, "echo 'error: no target' >&2; exit 1;")
+    info = bender.collect(str(project_dir))
+    assert not info.failure, "the file list is available, so the run continues"
+    assert any("no package data" in d for d in info.diagnostics)
+
+
+def test_unreadable_sources_json_is_reported(project_dir, tmp_path, monkeypatch):
+    _fake_bender(tmp_path, monkeypatch, "echo 'not json'; exit 0;")
+    info = bender.collect(str(project_dir))
+    assert not info.failure
+    assert any("JSON" in d for d in info.diagnostics)
+
+
+def test_command_file_entries_have_quotation_marks(tmp_path):
+    """slang divides a command file at each space. Thus a path with a space in it
+    needs quotation marks."""
+    info = bender.BenderInfo(flist_plus=(
+        "+incdir+/my design/include\n"
+        "\n"
+        "/my design/rtl/a.sv\n"
+    ))
+    path = bender.write_command_file(info, str(tmp_path / "sources.f"))
+    assert open(path).read().splitlines() == [
+        '"+incdir+/my design/include"',
+        '"/my design/rtl/a.sv"',
+    ]

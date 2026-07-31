@@ -1,20 +1,9 @@
-"""Project conventions: where the docs go, how they are found, and how to open them.
+"""The rules of a project: the root, the output directory and the settings.
 
-SVDocGraph is meant to be installed once and run inside any Bender repository with
-no arguments, the way ``cargo doc`` or ``mkdocs build`` are. That convenience lives
-here:
-
-* :func:`find_project_root` - run the tool from any subdirectory; the project root
-  is the nearest ancestor with a ``Bender.yml``.
-* :data:`DEFAULT_OUTPUT` - generated docs land in a single tool-owned directory,
-  ``.svdocgraph/``, so a project only ever needs one ``.gitignore`` line and the
-  output can never collide with a hand-written ``docs/``.
-* :func:`load_config` - optional ``svdocgraph.yml`` so ``make docs`` needs no flags.
-* :func:`ensure_gitignored` - keep the generated directory out of commits.
-* :func:`read_build_info` / :func:`write_build_info` - a marker file inside the
-  output directory. It records what produced the build (so ``svdocgraph open`` can
-  report its age) and marks the directory as ours, so a build never deletes files
-  from a directory SVDocGraph did not generate.
+The user runs the tool in a Bender project without options. These functions make
+that possible. They find the project root, read the optional settings file, keep
+the output directory out of the commits, and mark the output directory. The mark
+makes sure that the tool removes only its own files.
 """
 
 from __future__ import annotations
@@ -26,22 +15,20 @@ from dataclasses import dataclass, field
 
 import yaml
 
-#: Generated documentation directory, relative to the project root.
+#: The output directory, relative to the project root.
 DEFAULT_OUTPUT = ".svdocgraph"
 
-#: Marker written inside the output directory; also identifies it as ours.
+#: The mark in the output directory. It shows that the tool made the directory.
 BUILD_INFO = ".svdocgraph-build.json"
 
-#: Config file names looked for in the project root, in order.
+#: The names of the settings file, in the sequence of the search.
 CONFIG_NAMES = ("svdocgraph.yml", "svdocgraph.yaml", ".svdocgraph.yml")
 
 
 def find_project_root(start: str = ".") -> tuple[str, bool]:
-    """Nearest ancestor of *start* containing a ``Bender.yml``.
+    """Finds the nearest parent directory that contains a `Bender.yml` file.
 
-    Returns ``(root, found)``. When no ``Bender.yml`` is found anywhere up the
-    tree, ``start`` itself is returned with ``found=False`` - the caller decides
-    whether that is fatal.
+    Gives (root, found). If there is no such directory, gives *start* and False.
     """
     cur = os.path.abspath(start)
     while True:
@@ -58,12 +45,12 @@ def find_project_root(start: str = ".") -> tuple[str, bool]:
 
 @dataclass
 class Config:
-    """Optional per-project settings from ``svdocgraph.yml``."""
+    """The settings from `svdocgraph.yml`. Each one is optional."""
 
     output: str = DEFAULT_OUTPUT
     tops: list[str] = field(default_factory=list)
-    name: str = ""          # display name; defaults to the project directory name
-    path: str = ""          # config file this came from ("" if none)
+    name: str = ""          # The title. The default is the directory name
+    path: str = ""          # The settings file. Empty if there is none
 
     @property
     def found(self) -> bool:
@@ -71,9 +58,9 @@ class Config:
 
 
 def load_config(project_root: str) -> Config:
-    """Read ``svdocgraph.yml`` from *project_root*, if present.
+    """Reads `svdocgraph.yml`, if it is available.
 
-    Unknown keys are ignored so a config written for a newer version still loads.
+    The function ignores an unknown key. Thus a file from a newer version loads.
     """
     for name in CONFIG_NAMES:
         path = os.path.join(project_root, name)
@@ -100,24 +87,23 @@ def load_config(project_root: str) -> Config:
 
 CONFIG_TEMPLATE = """\
 # SVDocGraph project configuration - https://github.com/lionnus/svdocgraph
-# Every key is optional; delete what you do not need.
+# Each key is optional. Remove the keys that you do not need.
 
-# Where `svdocgraph gen` writes the site (relative to this file).
+# The output directory, relative to this file.
 output: {output}
 
-# Extra top modules to elaborate, for tops only reachable from a testbench.
+# Additional top modules. Use this for a top that only a testbench instantiates.
 # tops:
 #   - my_top
 #   - my_other_top
 
-# Display name in the site header (defaults to the project directory name).
+# The title in the page header. The default is the name of the directory.
 # name: My Design
 """
 
 
 def write_config(project_root: str, output: str = DEFAULT_OUTPUT) -> str | None:
-    """Create ``svdocgraph.yml`` in *project_root*. Returns the path, or None if
-    a config already exists."""
+    """Writes `svdocgraph.yml`. Gives the path, or None if the file exists."""
     existing = load_config(project_root)
     if existing.found:
         return None
@@ -142,31 +128,25 @@ def git_root(path: str) -> str | None:
 
 
 def _is_ignored(repo: str, target: str) -> bool:
-    """True if git already ignores *target* (honours nested and global excludes)."""
-    try:
-        rc = subprocess.run(
-            ["git", "check-ignore", "-q", target],
-            cwd=repo, capture_output=True, text=True,
-        ).returncode
-    except FileNotFoundError:
-        return False
-    return rc == 0
+    """True if git ignores the target."""
+    return subprocess.run(
+        ["git", "check-ignore", "-q", target],
+        cwd=repo, capture_output=True, text=True,
+    ).returncode == 0
 
 
 def ensure_gitignored(outdir: str) -> str | None:
-    """Make sure the generated directory is not committed.
+    """Keeps the output directory out of the commits.
 
-    Appends a rule to the repository's top-level ``.gitignore`` (creating it if
-    needed) when *outdir* is inside a git work tree and not already ignored.
-    Returns the ``.gitignore`` path if it was modified, else ``None``.
+    Adds a rule to the `.gitignore` file of the repository. Does nothing if the
+    directory is not in a repository, or if git ignores it. Gives the path of the
+    changed file, or None.
     """
     outdir = os.path.abspath(outdir)
     repo = git_root(os.path.dirname(outdir))
     if not repo:
         return None
     rel = os.path.relpath(outdir, repo)
-    if rel.startswith(".."):        # output lives outside the repo; nothing to do
-        return None
     probe = os.path.join(outdir, "index.html")
     if _is_ignored(repo, probe):
         return None
@@ -202,7 +182,7 @@ def write_build_info(outdir: str, **fields) -> None:
 
 
 def is_ours(outdir: str) -> bool:
-    """True if *outdir* is empty, missing, or a previous SVDocGraph build."""
+    """True if the directory is empty, or if the tool made it."""
     if not os.path.isdir(outdir):
         return True
     if not os.listdir(outdir):
@@ -211,6 +191,6 @@ def is_ours(outdir: str) -> bool:
 
 
 def index_url(outdir: str) -> str:
-    """``file://`` URL of the generated entry page."""
+    """The `file://` URL of the first page."""
     index = os.path.abspath(os.path.join(outdir, "index.html"))
     return "file://" + index

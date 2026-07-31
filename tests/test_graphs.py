@@ -1,4 +1,4 @@
-"""Graph construction: what goes into the DOT, and what deliberately does not."""
+"""The graphs: what the DOT contains, and what it does not contain."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from svdocgraph.model import BenderPackage, Design, Instance, Module, Port, Port
 
 @pytest.fixture
 def design() -> Design:
-    """A two-deep design: top instantiates two adders joined by the net `mid`."""
+    """A design with two levels. The net `mid` connects the two adders."""
     d = Design(root_package="demo_ip", project_root="/demo", tops=["top"])
     d.modules["adder"] = Module(
         name="adder", package="demo_ip",
@@ -46,7 +46,7 @@ def test_internal_graph_shows_instances_and_the_net_between_them(design):
 
 
 def test_internal_graph_omits_clocks_and_resets(design):
-    """Clock and reset nets touch everything and would hide the dataflow."""
+    """A clock net touches each instance. It would hide the data flow."""
     dot = graphs.internal_dot(design, "top")
     assert "clk_i" not in dot
     assert "rst_ni" not in dot
@@ -57,7 +57,7 @@ def test_internal_graph_is_empty_for_a_leaf_module(design):
 
 
 def test_internal_graph_drops_single_endpoint_nets(design):
-    """A net with one endpoint is not a connection, so it is not drawn."""
+    """A net with one end is not a connection. The graph does not show it."""
     design.modules["top"].instances[0].conns.append(PortConn("b_i", "dangling"))
     assert "dangling" not in graphs.internal_dot(design, "top")
 
@@ -151,3 +151,34 @@ def test_connection_role_follows_the_modport_for_interfaces():
 def test_interface_connections_use_the_modport_not_the_port_direction(design):
     conn = PortConn("bus", "i_stream", is_interface=True, modport="source")
     assert graphs._conn_role(conn, design.modules["adder"]) == "driver"
+
+
+def test_a_net_with_three_endpoints_uses_a_hub(design):
+    """Two ends connect directly. More ends need a signal node between them."""
+    design.modules["top"].instances.append(
+        Instance(name="i_c", module="adder", conns=[PortConn("a_i", "mid")])
+    )
+    dot = graphs.internal_dot(design, "top")
+    assert '"n__mid"' in dot, "the shared net becomes its own node"
+
+
+def test_hierarchy_visits_a_repeated_module_one_time(design):
+    design.modules["top"].instances.append(
+        Instance(name="i_c", module="adder", conns=[])
+    )
+    dot = graphs.hierarchy_dot(design)
+    assert dot.count('"adder" [') == 1
+
+
+def test_a_black_box_connection_has_no_direction(design):
+    """The ports of a black box are unknown. Thus the edge has no arrow."""
+    design.modules["top"].instances.append(
+        Instance(name="i_x", module="unknown_cell", conns=[PortConn("p", "mid")])
+    )
+    assert "dir=none" in graphs.internal_dot(design, "top")
+
+
+def test_hierarchy_skips_a_top_that_was_not_extracted(design):
+    design.tops.append("absent_top")
+    dot = graphs.hierarchy_dot(design)
+    assert '"absent_top" ->' not in dot

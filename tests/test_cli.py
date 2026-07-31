@@ -1,4 +1,4 @@
-"""End-to-end CLI behaviour, driven against the fixture project via a stub bender."""
+"""The commands, from end to end, with the example project."""
 
 from __future__ import annotations
 
@@ -92,7 +92,7 @@ def test_config_drives_output_and_title(run_cli, project_dir, stub_bender):
 
 
 def test_search_index_is_inlined_and_valid(run_cli, project_dir, stub_bender):
-    """A file:// page cannot fetch design.json, so the index must be embedded."""
+    """A `file://` page cannot read a file. Thus each page contains the index."""
     assert _gen(run_cli, project_dir) == 0
     html = (project_dir / project.DEFAULT_OUTPUT / "module-demo_top.html").read_text()
     m = re.search(r'<script id="svdg-data" type="application/json">(.*?)</script>',
@@ -159,8 +159,8 @@ def test_missing_bender_fails_with_a_hint(run_cli, project_dir, monkeypatch, cap
 
 def test_failing_bender_is_reported_in_its_own_words(run_cli, project_dir, tmp_path,
                                                      monkeypatch, capsys):
-    """An unresolvable dependency is the most common real failure; bender explains
-    it well, so that explanation must reach the user rather than 'no modules'."""
+    """A dependency that bender cannot resolve is the most usual failure. bender
+    gives a clear message, thus the user must see that message."""
     bindir = tmp_path / "badbin"
     bindir.mkdir()
     exe = bindir / "bender"
@@ -222,7 +222,7 @@ def test_open_explains_a_browser_that_will_not_start(run_cli, project_dir, stub_
 
 
 class _FakeServer:
-    """Stands in for socketserver.TCPServer: accepts one request, then stops."""
+    """A substitute for socketserver.TCPServer. It stops after one request."""
 
     served = False
 
@@ -286,14 +286,13 @@ def test_dump_also_stops_when_bender_fails(run_cli, project_dir, tmp_path, monke
 
 
 def test_doctor_lists_graphviz_as_optional(run_cli, stub_bender, monkeypatch, capsys):
-    """Graphviz missing is a warning, not a failure: the site still builds."""
+    """Graphviz is not necessary. Its absence gives a warning, not an error."""
     import shutil as _shutil
     real = _shutil.which
     monkeypatch.setattr(deps.shutil, "which",
                         lambda name: None if name == "dot" else real(name))
     assert run_cli("doctor") == 0
-    out = capsys.readouterr().out
-    assert "graphs will be omitted" in out
+    assert "The pages show no graphs" in capsys.readouterr().out
 
 
 def test_gen_warns_but_continues_without_graphviz(run_cli, project_dir, stub_bender,
@@ -304,5 +303,53 @@ def test_gen_warns_but_continues_without_graphviz(run_cli, project_dir, stub_ben
                         lambda name: None if name == "dot" else real(name))
     monkeypatch.setattr("svdocgraph.graphs.have_dot", lambda: False)
     assert _gen(run_cli, project_dir) == 0
-    assert "graphs will be omitted" in capsys.readouterr().err
+    assert "The pages show no graphs" in capsys.readouterr().err
     assert (project_dir / project.DEFAULT_OUTPUT / "index.html").is_file()
+
+
+def test_generate_loops_collapse_into_one_instance(run_cli, project_dir, stub_bender):
+    """A generate loop makes N copies of one instance. The page shows one row."""
+    assert _gen(run_cli, project_dir) == 0
+    model = json.loads((project_dir / project.DEFAULT_OUTPUT / "model.json").read_text())
+    stages = [i for i in model["modules"]["demo_gen"]["instances"] if i["name"] == "i_stage"]
+    assert len(stages) == 1
+    assert stages[0]["count"] == 4
+    assert stages[0]["array"] is True
+
+
+def test_init_keeps_an_existing_config(run_cli, project_dir, capsys):
+    (project_dir / "svdocgraph.yml").write_text("name: Mine\n")
+    assert run_cli("init", cwd=project_dir) == 0
+    assert (project_dir / "svdocgraph.yml").read_text() == "name: Mine\n"
+    assert "already exists" in capsys.readouterr().err
+
+
+def test_an_empty_design_is_not_rendered(run_cli, project_dir, tmp_path, monkeypatch):
+    """bender answers, but gives no source file. The tool writes no pages."""
+    bindir = tmp_path / "emptybin"
+    bindir.mkdir()
+    exe = bindir / "bender"
+    exe.write_text(
+        "#!/bin/sh\n"
+        '[ "$1" = "--version" ] && { echo "bender 0.28.1"; exit 0; }\n'
+        '[ "$1 $2" = "script flist-plus" ] && exit 0\n'
+        '[ "$1 $2" = "sources -f" ] && { echo "{}"; exit 0; }\n'
+        "exit 1\n"
+    )
+    exe.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bindir}:{os.environ['PATH']}")
+    assert run_cli("gen", cwd=project_dir) == 1
+    assert not (project_dir / project.DEFAULT_OUTPUT).exists()
+
+
+def test_a_manifest_without_a_package_name_warns(run_cli, project_dir, stub_bender, capsys):
+    """Without a package name, no package owns the files. slang can still find
+    the tops, thus the run continues with a warning."""
+    (project_dir / "Bender.yml").write_text("sources:\n  - rtl/demo_adder.sv\n")
+    assert run_cli("gen", cwd=project_dir) == 0
+    assert "No bender root package" in capsys.readouterr().err
+
+
+def test_init_outside_a_bender_project_warns(run_cli, tmp_path, capsys):
+    assert run_cli("init", cwd=tmp_path) == 0
+    assert "No Bender.yml" in capsys.readouterr().err

@@ -1,8 +1,7 @@
-"""Static-site renderer.
+"""Writes the HTML pages.
 
-Turns the extracted :class:`~svdocgraph.model.Design` into a self-contained,
-offline, modern HTML site (no server required to view). Graphs are inlined as
-clickable SVG; a single ``design.json`` powers instant client-side search.
+The renderer makes a static site from the design model. The site operates offline:
+each graph is inline SVG and the search index is in each page.
 """
 
 from __future__ import annotations
@@ -27,7 +26,7 @@ _SVG_WH = re.compile(r'(<svg\b[^>]*?)\s+width="[^"]*"\s+height="[^"]*"', re.S)
 
 
 def _responsive(svg: str | None) -> str | None:
-    """Drop fixed width/height so CSS can size the SVG; tag it for the JS."""
+    """Removes the fixed size of an SVG. Thus the style sheet can scale it."""
     if not svg:
         return None
     svg = _SVG_WH.sub(r"\1", svg, count=1)
@@ -35,7 +34,7 @@ def _responsive(svg: str | None) -> str | None:
 
 
 def _json_for_script(payload) -> str:
-    """JSON safe to embed in an inline ``<script>`` element."""
+    """JSON that is safe in an inline `<script>` element."""
     return (json.dumps(payload, separators=(",", ":"))
             .replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026"))
 
@@ -44,7 +43,6 @@ class Renderer:
     def __init__(self, design: Design, outdir: str, title: str = ""):
         self.design = design
         self.outdir = outdir
-        self.title = title
         self._search_json = "{}"   # replaced in _write_search_index, before any page
         self.env = Environment(
             loader=FileSystemLoader(_TEMPLATES),
@@ -62,9 +60,8 @@ class Renderer:
         self.env.filters["dirbadge"] = _dirbadge
         self.env.filters["reset_polarity"] = model_reset_polarity
 
-    # -- nav ----------------------------------------------------------------
     def _nav(self) -> list[dict]:
-        """Sidebar: modules grouped by package, root package first."""
+        """The side bar. The modules are in groups by package."""
         groups: dict[str, list[Module]] = {}
         for m in self.design.modules.values():
             groups.setdefault(m.package or "(unknown)", []).append(m)
@@ -85,15 +82,15 @@ class Renderer:
         base = {
             "nav": self._nav(),
             "design": self.design,
-            # Inlined so search works when the site is opened straight from disk
-            # (a file:// page may not fetch design.json).
+            # The index is in each page. Thus the search operates when the user
+            # opens the page from the disk. A `file://` page cannot read a file.
             "search_json": self._search_json,
         }
         base.update(kw)
         return base
 
-    # -- build --------------------------------------------------------------
     def build(self) -> None:
+        """Writes the full site."""
         os.makedirs(self.outdir, exist_ok=True)
         self._clean()
         self._copy_assets()
@@ -108,10 +105,10 @@ class Renderer:
         self._write_build_info()
 
     def _clean(self) -> None:
-        """Remove artifacts from a previous build so stale pages do not linger.
+        """Removes the pages of the last run. Thus no old page stays.
 
-        Only files matching what this tool generates are removed, never the output
-        directory itself and never anything else that happens to live there.
+        The function removes only the files that have the names that the tool
+        writes. It does not remove the directory or any other file.
         """
         keep = {"index.html", "hierarchy.html", "packages.html"}
         for fn in os.listdir(self.outdir):
@@ -143,6 +140,7 @@ class Renderer:
         shutil.copytree(_ASSETS, dst, dirs_exist_ok=True)
 
     def _write_search_index(self) -> None:
+        """Writes the search index, and keeps a copy for the pages."""
         idx = []
         for m in self.design.modules.values():
             idx.append({
@@ -165,7 +163,7 @@ class Renderer:
         self._search_json = _json_for_script(payload)
         with open(os.path.join(self.outdir, "design.json"), "w") as fh:
             json.dump(payload, fh)
-        # full model for power users / other tools
+        # The full model, for other tools
         with open(os.path.join(self.outdir, "model.json"), "w") as fh:
             json.dump(self.design.to_json(), fh, indent=2)
 

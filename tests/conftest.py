@@ -1,10 +1,8 @@
-"""Shared fixtures.
+"""The fixtures that the tests use.
 
-The tests must run without a real `bender` installation (it is a Rust binary, and
-CI for a Python package should not need one to test the Python). `stub_bender`
-puts a tiny script on the PATH that answers the three commands SVDocGraph asks of
-bender, using the fixture project in `tests/fixtures/demo`. The real thing is
-covered by the integration workflow, which runs against actual PULP repositories.
+The tests operate without an installation of bender. The `stub_bender` fixture
+puts a small script on the PATH. The script answers the three commands that the
+tool sends to bender. The integration workflow uses the true bender.
 """
 
 from __future__ import annotations
@@ -25,18 +23,19 @@ STUB_BENDER = """\
 import json, os, sys
 
 def sources():
-    # Real bender is always invoked with cwd=<project root>.
+    # The tool always calls bender in the project root.
     rtl = os.path.join(os.getcwd(), "rtl")
     files = [os.path.join(rtl, f) for f in sorted(os.listdir(rtl)) if f.endswith(".sv")]
-    # demo_pkg and the interface must be compiled before their users.
-    order = ["demo_pkg.sv", "demo_bus_if.sv", "demo_adder.sv", "demo_top.sv"]
+    # The package and the interface must come before the modules that use them.
+    order = ["demo_pkg.sv", "demo_bus_if.sv", "demo_adder.sv", "demo_top.sv",
+             "demo_gen.sv"]
     files.sort(key=lambda p: order.index(os.path.basename(p))
                if os.path.basename(p) in order else 99)
     return files
 
 argv = sys.argv[1:]
 if argv[:1] == ["--version"]:
-    print("bender 0.28.1 (stub)")   # must work from any cwd
+    print("bender 0.28.1 (stub)")   # This must operate in each directory
 elif argv[:2] == ["script", "flist-plus"]:
     files = sources()
     print("\\n".join(files))
@@ -49,7 +48,7 @@ else:
 
 @pytest.fixture
 def project_dir(tmp_path: Path) -> Path:
-    """A throwaway copy of the demo bender project, inside a git repo."""
+    """A copy of the example project, in a new git repository."""
     dst = tmp_path / "demo"
     shutil.copytree(FIXTURES / "demo", dst)
     subprocess.run(["git", "init", "-q"], cwd=dst, check=False)
@@ -58,7 +57,7 @@ def project_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def stub_bender(tmp_path: Path, monkeypatch) -> Path:
-    """Put a fake `bender` on the PATH."""
+    """Puts a substitute for `bender` on the PATH."""
     bindir = tmp_path / "bin"
     bindir.mkdir(exist_ok=True)
     exe = bindir / "bender"
@@ -70,7 +69,7 @@ def stub_bender(tmp_path: Path, monkeypatch) -> Path:
 
 @pytest.fixture
 def run_cli(monkeypatch):
-    """Run the CLI in-process from a given directory, returning its exit code."""
+    """Runs the command-line interface in a directory. Gives the exit code."""
     from svdocgraph import cli
 
     def _run(*argv: str, cwd: Path | None = None) -> int:

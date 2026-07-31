@@ -25,8 +25,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The floor is what pyproject claims; the ceiling is the newest pyslang
-        # wheel target. Both ends are load-bearing, so both are tested.
+        # The lowest version is the one in pyproject.toml. The highest version is
+        # the newest one that pyslang gives a wheel for.
         python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +39,7 @@ jobs:
       - run: uv run --extra dev --python ${{ matrix.python }} pytest -v
 
   coverage:
-    # `fail_under` lives in pyproject.toml and is the number on the README badge.
+    # The minimum is in pyproject.toml. It is also the number on the README badge.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -70,8 +70,8 @@ jobs:
           path: coverage.xml
 
   package:
-    # The tool is installed with `uv tool install` / `pipx`, so the wheel - not the
-    # source tree - is what users actually run. Build it and drive it.
+    # A user installs the wheel, not the source directory. Thus this job builds the
+    # wheel, installs it, and runs the installed command.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -83,7 +83,7 @@ jobs:
         run: |
           uv venv /tmp/clean
           uv pip install --python /tmp/clean/bin/python dist/*.whl
-      - name: Templates, assets and fonts must ship in the wheel
+      - name: The wheel must contain the templates, the assets and the fonts
         run: |
           /tmp/clean/bin/python - <<'PY'
           import pathlib, svdocgraph
@@ -95,11 +95,11 @@ jobs:
           assert not missing, f"missing from wheel: {missing}"
           print("wheel contents OK")
           PY
-      - name: The entry point runs
+      - name: The installed command runs
         run: |
           /tmp/clean/bin/svdocgraph --version
           /tmp/clean/bin/svdocgraph --help
-      - name: doctor reports the missing bender rather than crashing
+      - name: doctor reports the bender that is not available
         run: |
           set +e
           out=$(/tmp/clean/bin/svdocgraph doctor); rc=$?

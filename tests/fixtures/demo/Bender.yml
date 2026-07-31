@@ -8,3 +8,4 @@ sources:
   - rtl/demo_bus_if.sv
   - rtl/demo_adder.sv
   - rtl/demo_top.sv
+  - rtl/demo_gen.sv

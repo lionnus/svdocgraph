@@ -1,4 +1,4 @@
-"""Renderer details that the end-to-end tests do not pin down."""
+"""The parts of the renderer that the end-to-end tests do not examine."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ def test_responsive_passes_through_a_missing_graph():
 
 
 def test_inline_json_cannot_close_the_script_element():
-    """A module named `</script>` must not break out of the inline data block."""
+    """A module with the name `</script>` must not close the data element."""
     payload = {"modules": [{"name": "</script><img src=x>"}]}
     out = render._json_for_script(payload)
     assert "</script>" not in out
