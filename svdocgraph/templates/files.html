@@ -13,7 +13,7 @@
   <figure class="graph graph-tall" data-zoom>{{ file_svg|safe }}
     <figcaption class="graph-tools">
       <button data-zoom-in>+</button><button data-zoom-out>-</button><button data-zoom-reset>reset</button>
-      <span class="graph-hint">scroll to zoom · drag to move · click a file to read the code</span>
+      <span class="graph-hint">scroll or pinch to zoom · drag to move · click a file to read the code</span>
     </figcaption>
   </figure>
   {% else %}
@@ -23,6 +23,7 @@
 
 <section class="card">
   <h2>Files and their units</h2>
+  <div class="tablewrap">
   <table class="tbl">
     <thead><tr><th>File</th><th class="num">Lines</th><th>Package</th><th>Units</th></tr></thead>
     <tbody>
@@ -40,5 +41,6 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </section>
 {% endblock %}

@@ -46,10 +46,12 @@
   <figure class="graph graph-tall" data-zoom>{{ internal_svg|safe }}
     <figcaption class="graph-tools">
       <button data-zoom-in>+</button><button data-zoom-out>-</button><button data-zoom-reset>reset</button>
-      <span class="graph-hint">scroll to zoom · drag to move · click a node to open</span>
+      <span class="graph-hint">scroll or pinch to zoom · drag to move · click a node to open</span>
     </figcaption>
   </figure>
-  <p class="graph-legend muted">A hexagon is an interface port: the signals go in two directions. A green box is an interface. The clock and the reset nets are not in the graph.</p>
+  <p class="graph-legend muted">Blue: an input. Magenta: an output. Green: an interface.
+  Orange: no direction. A hexagon shows a port that goes in two directions. The clock
+  and the reset nets are not in the graph.</p>
 </section>
 {% elif mod.module_instances %}
 {% else %}

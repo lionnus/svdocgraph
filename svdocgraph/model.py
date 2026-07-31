@@ -36,6 +36,37 @@ def interface_dir(modport: str) -> str:
     return "inout"
 
 
+#: The name endings that give a direction. The longer ending comes first.
+_DIR_SUFFIX = (("_in", "in"), ("_out", "out"), ("_i", "in"), ("_o", "out"))
+
+
+def name_direction(name: str) -> str:
+    """The direction that the name of a port gives, or `` if it gives none."""
+    n = name.lower()
+    for suffix, direction in _DIR_SUFFIX:
+        if n.endswith(suffix):
+            return direction
+    return ""
+
+
+def graph_dir(port) -> str:
+    """The direction to draw: `in`, `out`, or `` for a port with no direction.
+
+    The language gives the direction of a logic port. An interface port has no
+    direction: the name gives it, and then the modport. An interface port with
+    no other data goes in two directions.
+    """
+    if not port.is_interface:
+        if port.direction in ("in", "out"):
+            return port.direction
+        return name_direction(port.name)
+    named = name_direction(port.name)
+    if named:
+        return named
+    modport = interface_dir(port.modport)
+    return modport if modport in ("in", "out") else ""
+
+
 def reset_polarity(name: str) -> str:
     """The polarity of a reset port, from its name."""
     n = name.lower()

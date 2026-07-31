@@ -91,16 +91,21 @@ def test_config_drives_output_and_title(run_cli, project_dir, stub_bender):
     assert not (project_dir / project.DEFAULT_OUTPUT).exists()
 
 
-def test_search_index_is_inlined_and_valid(run_cli, project_dir, stub_bender):
-    """A `file://` page cannot read a file. Thus each page contains the index."""
+def test_the_search_index_is_one_script_that_each_page_loads(run_cli, project_dir,
+                                                             stub_bender):
+    """A `file://` page cannot read a file with fetch, but it can load a script."""
+    from svdocgraph.check import SEARCH_INDEX
+    out = project_dir / project.DEFAULT_OUTPUT
     assert _gen(run_cli, project_dir) == 0
-    html = (project_dir / project.DEFAULT_OUTPUT / "module-demo_top.html").read_text()
-    m = re.search(r'<script id="svdg-data" type="application/json">(.*?)</script>',
-                  html, re.S)
-    assert m, "no inline search index"
+    m = SEARCH_INDEX.search((out / "assets" / "search.js").read_text())
+    assert m, "no search index"
     data = json.loads(m.group(1))
     assert {mod["name"] for mod in data["modules"]} >= {"demo_top", "demo_adder"}
     assert "</script>" not in m.group(1)
+    for page in ("index.html", "module-demo_top.html"):
+        html = (out / page).read_text()
+        assert '<script src="assets/search.js">' in html
+        assert "demo_adder" not in html.split("<footer")[-1], "no copy in the page"
 
 
 @needs_dot

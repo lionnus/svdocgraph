@@ -53,8 +53,16 @@ workflows of this repository use the same command as a user does.
 - A build marks its output directory with `.svdocgraph-build.json`; `gen` refuses to
   clean a non-empty directory without that marker unless `--force` is given, and
   only removes files matching its own naming scheme.
-- The search index is inlined into every page, so the site is fully functional when
-  opened over `file://` (a `file://` page cannot `fetch()` `design.json`).
+- The search index is a script that each page loads, thus the search works over
+  `file://` too, where a page cannot `fetch()` a file. It was in each page: on
+  pulp-platform/axi that is 47 kB in each of 220 pages, which made the site 10 MB
+  larger than it is now.
+- The graphs answer to a pinch and to a drag with two fingers. The CSS gives one
+  finger to the browser (`touch-action: pan-x pan-y`), thus the page still scrolls
+  and a tap still opens a node.
+- Below 860 px the side bar goes away and each column gets `min-width: 0`. Without
+  that, a grid column keeps the width of its widest content and the page scrolls
+  to the side. A wide table scrolls in its own box.
 - `svdocgraph.yml` (optional, written by `svdocgraph init`) sets the output
   directory, extra tops and the display name, so `make docs` needs no flags.
 
@@ -135,9 +143,15 @@ workflows of this repository use the same command as a user does.
 
 ### The graphs
 
-- The direction of a port comes from the declaration, and not from the name. An
-  interface port has no direction in the language: the pin is a hexagon, which
-  shows that the signals go in two directions, and the modport gives the side.
+- The colour of a pin gives the kind, and the shape gives the direction. Blue is
+  an input, magenta an output, green an interface and orange no direction. These
+  are the colours of the port table, thus the graph and the table agree.
+- The direction of a logic port comes from the declaration. An interface port has
+  no direction in the language: the name gives it (`_i`, `_in`, `_o`, `_out`),
+  then the modport. A port that gives neither is a hexagon: the signals go in two
+  directions. The name comes before the modport, because a person reads the name.
+- `cds` draws about two thirds of the height of its node and `hexagon` draws the
+  full height. Each pin gets the height that makes the two the same.
 - A node opens what it shows: an instance opens the module, an interface port and
   an interface signal open the interface, and a file opens the code.
 - An element of an instance array has no name of its own. The extractor takes the

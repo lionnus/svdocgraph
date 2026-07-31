@@ -62,10 +62,7 @@ def test_a_module_without_a_page_is_a_problem(site):
 
 
 def test_a_broken_search_index_is_a_problem(site):
-    text = (site / "index.html").read_text()
-    text = text.replace('<script id="svdg-data" type="application/json">',
-                        '<script id="svdg-data" type="application/json">}{')
-    (site / "index.html").write_text(text)
+    (site / "assets" / "search.js").write_text("window.SVDG_DATA={oops};\n")
     assert any("not valid JSON" in p for p in check.check(str(site)))
 
 
@@ -77,8 +74,8 @@ def test_an_index_that_does_not_match_the_model_is_a_problem(site):
 
 
 def test_an_index_without_the_search_data_is_a_problem(site):
-    (site / "index.html").write_text("<html></html>")
-    assert "index.html has no inlined search index" in check.check(str(site))
+    (site / "assets" / "search.js").write_text("// nothing here\n")
+    assert "assets/search.js has no search index" in check.check(str(site))
 
 
 def test_the_graphs_are_a_condition(site):

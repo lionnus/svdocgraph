@@ -48,7 +48,6 @@ class Renderer:
         self.doc_dirs = list(doc_dirs or [])
         self.with_docs = with_docs
         self.with_sources = with_sources
-        self._search_json = "{}"   # replaced in _write_search_index, before any page
         self._doc_media: dict = {}
         self._file_dot = ""
         self._has_file_graph = False
@@ -94,9 +93,6 @@ class Renderer:
             "has_files": self._has_file_graph or bool(self.design.sources),
             "design": self.design,
             "src_urls": self._src_urls,
-            # The index is in each page. Thus the search operates when the user
-            # opens the page from the disk. A `file://` page cannot read a file.
-            "search_json": self._search_json,
         }
         base.update(kw)
         return base
@@ -211,7 +207,13 @@ class Renderer:
             fh.write(source.style_css())
 
     def _write_search_index(self) -> None:
-        """Writes the search index, and keeps a copy for the pages."""
+        """Writes the search index one time, as a script that each page loads.
+
+        A `file://` page cannot read a file with `fetch`, but it can load a
+        script. Thus the index is a script, and not JSON that the pages fetch or
+        hold. A design of 150 modules gives an index of 150 kB: in each of the
+        400 pages that is 60 MB, and in one script it is 150 kB.
+        """
         idx = []
         for m in self.design.modules.values():
             idx.append({
@@ -241,7 +243,8 @@ class Renderer:
                 for s in self.design.sources.values()
             ],
         }
-        self._search_json = _json_for_script(payload)
+        with open(os.path.join(self.outdir, "assets", "search.js"), "w") as fh:
+            fh.write(f"window.SVDG_DATA={_json_for_script(payload)};\n")
         with open(os.path.join(self.outdir, "design.json"), "w") as fh:
             json.dump(payload, fh)
         # The full model, for other tools

@@ -15,7 +15,7 @@ import re
 import shutil
 import subprocess
 
-from .model import Design, _is_clock, _is_reset
+from .model import Design, _is_clock, _is_reset, graph_dir
 
 # The colours. Each fill is solid. There are no borders and no round corners.
 C_OWNED = "#2563eb"     # Modules of the root package
@@ -25,7 +25,17 @@ C_DEP_TXT = "#334155"
 C_IFACE = "#0d9488"     # Interfaces
 C_NET = "#ffffff"       # Signal nodes
 C_NET_TXT = "#475569"
-C_PORT = "#0f172a"      # Ports of the module
+# The pins of the module. The colour gives the kind, the shape gives the
+# direction. These are the colours of the port table, thus the two agree.
+C_IN = "#2563eb"        # An input
+C_OUT = "#c81d77"       # An output
+C_IO = "#b45309"        # No direction: the signals go both ways
+
+# `cds` draws about two thirds of the height of its node, and `hexagon` draws the
+# full height. These values give each pin and each signal the same height.
+PIN_CDS = 'shape=cds, height=0.37, margin="0.16,0.0"'
+PIN_HEX = 'shape=hexagon, height=0.25, margin="0.16,0.0"'
+NET_BOX = 'shape=box, height=0.25, margin="0.10,0.0"'
 C_CLUSTER = "#f1f5f9"   # Fill of the module boundary
 C_CLUSTER_LINE = "#cbd5e1"
 EDGE = "#94a3b8"
@@ -173,18 +183,17 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
     # interface links to the declaration of that interface.
     iface_of = {i.name: i.module for i in mod.interface_instances}
 
-    # A boundary port joins the net that has its name. `input` and `output` give
-    # the side. An interface port has no direction in the language: the modport
-    # gives the side, and the pin shows both directions.
+    # A boundary port joins the net that has its name. `graph_dir` gives `in`,
+    # `out` or `` for a port with no direction.
     boundary: dict[str, dict] = {}
     for p in mod.ports:
         if p.name in nets and not (_is_clock(p.name) or _is_reset(p.name)):
-            d = p.eff_dir
+            d = graph_dir(p)
             role = "driver" if d == "in" else ("load" if d == "out" else "both")
             boundary[p.name] = {
-                "side": "in" if d == "in" else "out",
-                "bidir": p.is_interface or p.direction == "inout",
+                "dir": d,
                 "iface": p.interface if p.is_interface else "",
+                "is_iface": p.is_interface,
             }
             nets[p.name].append((f"p__{p.name}", role))
 
@@ -199,15 +208,19 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
     for net in kept_nets:
         if net in boundary:
             info = boundary[net]
-            rank = "min" if info["side"] == "in" else "max"
-            if info["bidir"]:
-                # A hexagon has a point at each end: the signals go both ways.
-                shape = "shape=hexagon, "
+            rank = "min" if info["dir"] == "in" else "max"
+            if info["dir"] == "in":
+                shape = f"{PIN_CDS}, "
+            elif info["dir"] == "out":
+                shape = f"{PIN_CDS}, orientation=180, "
             else:
-                shape = "shape=cds, " + ("" if info["side"] == "in" else "orientation=180, ")
+                # A hexagon has a point at each end: the signals go both ways.
+                shape = f"{PIN_HEX}, "
+            fill = (C_IFACE if info["is_iface"]
+                    else {"in": C_IN, "out": C_OUT}.get(info["dir"], C_IO))
             lines.append(
                 f'  {{ rank={rank}; "p__{net}" [{shape}{_link(design, info["iface"])}'
-                f'label="{html.escape(net)}", fillcolor="{C_PORT}", fontcolor="white", '
+                f'label="{html.escape(net)}", fillcolor="{fill}", fontcolor="white", '
                 "fontsize=10]; }"
             )
     # The module itself is the enclosing block; submodules and signals nest inside.
@@ -235,9 +248,9 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
             fill = C_IFACE if iface else C_NET
             txt = "white" if iface else C_NET_TXT
             lines.append(
-                f'    "n__{net}" [{_link(design, iface)}label="{html.escape(net)}", '
-                f'fillcolor="{fill}", fontcolor="{txt}", fontname="{FONT_MONO}", '
-                'fontsize=9, margin="0.08,0.03"];'
+                f'    "n__{net}" [{NET_BOX}, {_link(design, iface)}'
+                f'label="{html.escape(net)}", fillcolor="{fill}", fontcolor="{txt}", '
+                f'fontname="{FONT_MONO}", fontsize=9];'
             )
     lines.append("  }")
     # Wiring: drivers point into the signal (or boundary pin), signals point out

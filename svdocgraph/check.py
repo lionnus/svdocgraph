@@ -11,13 +11,11 @@ import json
 import os
 import re
 
-INLINE_INDEX = re.compile(
-    r'<script id="svdg-data" type="application/json">(.*?)</script>', re.S
-)
+SEARCH_INDEX = re.compile(r"window\.SVDG_DATA\s*=\s*(\{.*\})\s*;", re.S)
 
 #: The files that each site must have.
 REQUIRED = ("index.html", "hierarchy.html", "packages.html", "design.json",
-            "model.json", "assets/style.css", "assets/app.js")
+            "model.json", "assets/style.css", "assets/app.js", "assets/search.js")
 
 
 def _names(value) -> list:
@@ -100,18 +98,18 @@ def check(site: str, **kw) -> list:
         model = json.loads(_read(site, "model.json"))
         modules = _check_model(model, lim, site, problems)
 
-    if os.path.isfile(os.path.join(site, "index.html")):
-        m = INLINE_INDEX.search(_read(site, "index.html"))
+    if os.path.isfile(os.path.join(site, "assets", "search.js")):
+        m = SEARCH_INDEX.search(_read(site, os.path.join("assets", "search.js")))
         if not m:
-            problems.append("index.html has no inlined search index")
+            problems.append("assets/search.js has no search index")
         else:
             try:
                 data = json.loads(m.group(1))
             except json.JSONDecodeError as exc:
-                problems.append(f"inlined search index is not valid JSON: {exc}")
+                problems.append(f"search index is not valid JSON: {exc}")
             else:
                 if len(data.get("modules", [])) != len(modules):
-                    problems.append("inlined search index does not match model.json")
+                    problems.append("search index does not match model.json")
 
     if lim.require_graphs and os.path.isfile(os.path.join(site, "hierarchy.html")):
         if "<svg" not in _read(site, "hierarchy.html"):

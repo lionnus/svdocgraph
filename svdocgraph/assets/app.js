@@ -31,16 +31,9 @@
   });
 
   // ---- command palette ----
-  // The index is inlined in every page so search works when the site is opened
-  // straight from disk (file:// pages are not allowed to fetch design.json).
-  let DATA = { modules: [], packages: [], docs: [], files: [] };
-  const inline = document.getElementById("svdg-data");
-  if (inline) {
-    try {
-      const d = JSON.parse(inline.textContent);
-      if (d && d.modules) DATA = d;
-    } catch (e) { /* fall through to the fetch below */ }
-  }
+  // assets/search.js sets window.SVDG_DATA. A script loads from disk, so the
+  // search works over file:// too, where fetch("design.json") is not allowed.
+  let DATA = window.SVDG_DATA || { modules: [], packages: [], docs: [], files: [] };
   if (!DATA.modules.length)
     fetch("design.json").then((r) => r.json()).then((d) => { DATA = d; }).catch(() => {});
 
@@ -150,14 +143,51 @@
       e.preventDefault();
       zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX, e.clientY);
     }, { passive: false });
+
+    // Touch: one finger scrolls the page and a tap opens a node (the CSS
+    // `touch-action` leaves those to the browser). Two fingers pinch to zoom and
+    // move the graph. Mouse and pen: a drag moves the graph.
+    const touches = new Map();
+    let gesture = null;
+    const middle = () => {
+      let x = 0, y = 0;
+      touches.forEach((p) => { x += p.x; y += p.y; });
+      return [x / touches.size, y / touches.size];
+    };
+    const spread = () => {
+      const [a, b] = [...touches.values()];
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    };
+
     svg.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "touch") {
+        touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (touches.size === 2) gesture = { at: middle(), size: spread() };
+        return;
+      }
       if (e.target.closest("a")) return; // let node links work
       panning = true; sx = e.clientX - tx; sy = e.clientY - ty; svg.setPointerCapture(e.pointerId);
     });
     svg.addEventListener("pointermove", (e) => {
+      if (e.pointerType === "touch") {
+        if (!touches.has(e.pointerId)) return;
+        touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (touches.size !== 2 || !gesture) return;
+        e.preventDefault();
+        const at = middle(), size = spread();
+        if (gesture.size > 0) zoomAt(size / gesture.size, at[0], at[1]);
+        tx += at[0] - gesture.at[0]; ty += at[1] - gesture.at[1]; apply();
+        gesture = { at, size };
+        return;
+      }
       if (!panning) return; tx = e.clientX - sx; ty = e.clientY - sy; apply();
     });
-    svg.addEventListener("pointerup", () => { panning = false; });
+    ["pointerup", "pointercancel", "pointerleave"].forEach((name) =>
+      svg.addEventListener(name, (e) => {
+        touches.delete(e.pointerId);
+        if (touches.size < 2) gesture = null;
+        panning = false;
+      }));
     const tools = fig.querySelector(".graph-tools");
     if (tools) {
       const c = () => { const r = svg.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
