@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ src.rel_path }}{% endblock %}
+{% block content %}
+<div class="breadcrumb">
+  <a href="index.html">{{ project_name }}</a> ›
+  <a href="files.html">Files</a> ›
+  <span class="mono">{{ src.rel_path }}</span>
+</div>
+
+<div class="page-head">
+  <div>
+    <div class="eyebrow">source file</div>
+    <h1 class="mono">{{ src.rel_path }}</h1>
+    <div class="meta-row">
+      {% if src.package %}<a class="pill pill-pkg" href="package-{{ src.package }}.html">{{ src.package }}</a>{% endif %}
+      <span class="pill">{{ src.lines }} lines</span>
+      {% if not src.highlighted %}<span class="pill" title="The file is large, or Pygments is not installed">no colours</span>{% endif %}
+    </div>
+  </div>
+</div>
+
+{% if src.units %}
+<section class="card card-flat">
+  <div class="chiprow">
+    {% for name, line in src.units %}
+    <a class="chip" href="#L-{{ line or 1 }}">{{ name }}<span class="chip-sub">line {{ line or '?' }}</span></a>
+    {% endfor %}
+  </div>
+  <p class="muted">The page of each unit:
+    {% for name, line in src.units %}<a class="mono" href="module-{{ name }}.html">{{ name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}.
+  </p>
+</section>
+{% endif %}
+
+<section class="card src-card">
+  {{ src.html|safe }}
+</section>
+{% endblock %}

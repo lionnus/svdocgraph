@@ -263,3 +263,19 @@ th.num, td.num { text-align:right; font-variant-numeric:tabular-nums; }
 .module-doc { font-size: 14px; }
 .module-doc > :first-child { margin-top: 0; }
 .module-doc > :last-child { margin-bottom: 0; }
+
+/* ---- The code of a source file ---------------------------------------- */
+.src-card { padding: 0; overflow-x: auto; }
+.src-card .hl { background: none; }
+.src-card table.hltable { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.src-card table.hltable td { padding: 0; vertical-align: top; background: none; }
+.src-card table.hltable tr:hover td { background: none; }
+.src-card pre { margin: 0; padding: 14px 0; font-family: var(--mono); line-height: 1.5;
+  background: none; border: 0; }
+.src-card td.linenos { width: 1%; user-select: none; }
+.src-card td.linenos pre { padding-left: 14px; padding-right: 14px; text-align: right; }
+.src-card td.linenos a { color: var(--muted); text-decoration: none; }
+.src-card td.linenos a:hover { color: var(--accent); }
+.src-card td.code { width: 100%; }
+.src-card td.code pre { padding-left: 16px; padding-right: 16px; }
+a.pill-file:hover { background: var(--accent-weak); color: var(--accent); }

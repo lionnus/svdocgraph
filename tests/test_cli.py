@@ -438,6 +438,60 @@ def test_the_file_graph_is_in_the_site(run_cli, project_dir, stub_bender):
     assert 'href="files.html"' in (out / "index.html").read_text()
 
 
+def test_each_file_gets_a_page_with_its_code(run_cli, project_dir, stub_bender):
+    assert _gen(run_cli, project_dir) == 0
+    out = project_dir / project.DEFAULT_OUTPUT
+    page = out / "src-rtl-demo_adder-sv.html"
+    assert page.is_file()
+    text = page.read_text()
+    assert "endmodule" in text, "the code must be in the page"
+    assert 'id="L-1"' in text
+    assert 'href="module-demo_adder.html"' in text
+    # The files page and the search index give the file.
+    assert 'href="src-rtl-demo_adder-sv.html"' in (out / "files.html").read_text()
+    index = json.loads((out / "design.json").read_text())
+    assert "rtl/demo_adder.sv" in {f["path"] for f in index["files"]}
+
+
+def test_the_page_of_a_module_links_to_its_line(run_cli, project_dir, stub_bender):
+    assert _gen(run_cli, project_dir) == 0
+    out = project_dir / project.DEFAULT_OUTPUT
+    model = json.loads((out / "model.json").read_text())
+    line = model["modules"]["demo_adder"]["line"]
+    assert line > 0
+    page = (out / "module-demo_adder.html").read_text()
+    assert f'href="src-rtl-demo_adder-sv.html#L-{line}"' in page
+
+
+def test_the_code_of_a_dependency_stays_out_of_the_site(
+        run_cli, project_dir, stub_bender_with_dependency):
+    assert _gen(run_cli, project_dir) == 0
+    out = project_dir / project.DEFAULT_OUTPUT
+    assert (out / "src-rtl-demo_top-sv.html").is_file()
+    assert not (out / "src-rtl-demo_adder-sv.html").is_file(), \
+        "demo_adder belongs to another package, thus its code has another licence"
+    assert (out / "module-demo_adder.html").is_file(), "the module keeps its page"
+
+
+def test_the_model_gives_the_files_but_not_the_code(run_cli, project_dir, stub_bender):
+    assert _gen(run_cli, project_dir) == 0
+    out = project_dir / project.DEFAULT_OUTPUT
+    model = json.loads((out / "model.json").read_text())
+    src = model["sources"]["src-rtl-demo_adder-sv"]
+    assert src["rel_path"] == "rtl/demo_adder.sv"
+    assert src["lines"] > 0
+    assert "html" not in src, "the code would make the model large"
+
+
+def test_the_settings_can_stop_the_pages_with_the_code(run_cli, project_dir, stub_bender):
+    (project_dir / "svdocgraph.yml").write_text("sources: false\n")
+    assert _gen(run_cli, project_dir) == 0
+    out = project_dir / project.DEFAULT_OUTPUT
+    assert not list(out.glob("src-*.html"))
+    assert (out / "files.html").is_file(), "the file graph stays"
+    assert "src-" not in (out / "module-demo_adder.html").read_text()
+
+
 def test_a_project_without_documentation_still_builds(run_cli, project_dir, stub_bender):
     (project_dir / "README.md").unlink()
     import shutil as _shutil

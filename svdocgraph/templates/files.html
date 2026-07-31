@@ -25,11 +25,12 @@
 <section class="card">
   <h2>Files and their units</h2>
   <table class="tbl">
-    <thead><tr><th>File</th><th>Package</th><th>Units</th></tr></thead>
+    <thead><tr><th>File</th><th class="num">Lines</th><th>Package</th><th>Units</th></tr></thead>
     <tbody>
       {% for row in rows %}
       <tr>
-        <td class="mono">{{ row.path }}</td>
+        <td class="mono">{% if row.url %}<a href="{{ row.url }}">{{ row.path }}</a>{% else %}{{ row.path }}{% endif %}</td>
+        <td class="num muted">{{ row.lines or '-' }}</td>
         <td>{% if row.package %}<a href="package-{{ row.package }}.html">{{ row.package }}</a>{% endif %}</td>
         <td>
           {% for u in row.units %}

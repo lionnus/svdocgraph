@@ -38,6 +38,8 @@ def main(argv=None) -> int:
                     help="the least number of written documentation pages")
     ap.add_argument("--require-file-graph", action="store_true",
                     help="the site must contain the graph of the source files")
+    ap.add_argument("--min-sources", type=int, default=0,
+                    help="the least number of pages that show the code")
     args = ap.parse_args(argv)
 
     site: Path = args.site
@@ -121,6 +123,18 @@ def main(argv=None) -> int:
         elif "<svg" not in files_page.read_text():
             problems.append("files.html contains no inline SVG")
 
+    src_pages = sorted(site.glob("src-*.html"))
+    if len(src_pages) < args.min_sources:
+        problems.append(f"only {len(src_pages)} source pages, "
+                        f"expected >= {args.min_sources}")
+    elif args.min_sources:
+        # The code must be in the page, and each unit must give its line.
+        first = src_pages[0].read_text()
+        if "hltable" not in first:
+            problems.append(f"{src_pages[0].name} shows no code")
+        if not any(m.get("line") for m in modules.values()):
+            problems.append("no module has a line number")
+
     if problems:
         print(f"FAIL {site}", file=sys.stderr)
         for p in problems:
@@ -130,7 +144,7 @@ def main(argv=None) -> int:
     print(f"OK {site}: {len(modules)} units, "
           f"{sum(1 for m in modules.values() if m.get('kind') == 'interface')} interfaces, "
           f"{len(list(site.glob('module-*.html')))} pages, "
-          f"{len(doc_pages)} written pages")
+          f"{len(doc_pages)} written pages, {len(src_pages)} source pages")
     return 0
 
 

@@ -2,7 +2,8 @@
 
 `bender` gives the source set. Without it the tool cannot start. Graphviz
 calculates the graph layouts. Without it the tool writes the pages but not the
-graphs. `pyslang` elaborates the design. An old version finds no modules.
+graphs. `pyslang` elaborates the design. An old version finds no modules. Pygments
+gives the colours of the code.
 
 These checks give a clear message in each of these conditions. The `doctor`
 command shows the results.
@@ -32,6 +33,7 @@ PYSLANG_HINT = (
     f"Install svdocgraph again to get pyslang >={PYSLANG_MIN},<{PYSLANG_MAX}:  "
     "uv tool install --force svdocgraph"
 )
+PYGMENTS_HINT = "Install svdocgraph again:  uv tool install --force svdocgraph"
 
 
 @dataclass
@@ -89,7 +91,17 @@ def check_pyslang() -> Dep:
     return Dep("pyslang", True, version)
 
 
+def check_pygments() -> Dep:
+    """Pygments gives the colours of the code. The pages operate without it."""
+    try:
+        import pygments
+    except ImportError:
+        return Dep("Pygments", False, "not installed. The code has no colours",
+                   PYGMENTS_HINT, required=False)
+    return Dep("Pygments", True, getattr(pygments, "__version__", "unknown"))
+
+
 def check_all() -> list[Dep]:
     """Every item the tool needs. Each check runs one time."""
-    return [check_bender(), check_dot(), check_pyslang(),
+    return [check_bender(), check_dot(), check_pyslang(), check_pygments(),
             Dep("python", True, sys.version.split()[0])]

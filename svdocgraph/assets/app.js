@@ -33,7 +33,7 @@
   // ---- command palette ----
   // The index is inlined in every page so search works when the site is opened
   // straight from disk (file:// pages are not allowed to fetch design.json).
-  let DATA = { modules: [], packages: [], docs: [] };
+  let DATA = { modules: [], packages: [], docs: [], files: [] };
   const inline = document.getElementById("svdg-data");
   if (inline) {
     try {
@@ -81,12 +81,19 @@
       if (s < 0 && (d.text || "").toLowerCase().includes(q)) s = 40;
       if (s >= 0) items.push({ name: d.name, url: d.url, package: d.path, _s: s, _type: "doc" });
     }
+    // The source files match on the file name and on the path.
+    for (const f of DATA.files || []) {
+      if (!q) continue;
+      let s = score({ name: f.name }, q);
+      if (s < 0 && (f.path || "").toLowerCase().includes(q)) s = 50;
+      if (s >= 0) items.push({ name: f.path, url: f.url, package: f.lines + " lines", _s: s, _type: "file" });
+    }
     items.sort((a, b) => b._s - a._s || a.name.localeCompare(b.name));
     results = items.slice(0, 40);
     sel = 0;
     pres.innerHTML = results.map((r, i) =>
       `<li class="${i === 0 ? "sel" : ""}" data-url="${r.url}">
-         <span class="r-kind">${r._type === "doc" ? "doc" : (r._type === "package" ? "pkg" : (r.owned ? "mod" : "ext"))}</span>
+         <span class="r-kind">${r._type === "doc" ? "doc" : (r._type === "file" ? "src" : (r._type === "package" ? "pkg" : (r.owned ? "mod" : "ext")))}</span>
          <span class="r-name">${r.name}</span>
          <span class="r-meta">${r._type === "module" ? (r.ni + "-&gt;" + r.no) : (r.package || "")}</span>
        </li>`).join("");

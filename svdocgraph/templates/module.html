@@ -15,7 +15,10 @@
     <div class="meta-row">
       {% if mod.name in design.tops %}<span class="pill pill-top">top</span>{% endif %}
       {% if mod.package %}<a class="pill pill-pkg" href="package-{{ mod.package }}.html">{{ mod.package }}</a>{% endif %}
-      {% if mod.rel_file %}<span class="pill pill-file mono">{{ mod.rel_file }}{% if mod.line %}:{{ mod.line }}{% endif %}</span>{% endif %}
+      {% if mod.rel_file and src_urls.get(mod.rel_file) %}
+      <a class="pill pill-file mono" href="{{ src_urls[mod.rel_file] }}#L-{{ mod.line or 1 }}"
+         title="Read the code">{{ mod.rel_file }}{% if mod.line %}:{{ mod.line }}{% endif %}</a>
+      {% elif mod.rel_file %}<span class="pill pill-file mono">{{ mod.rel_file }}{% if mod.line %}:{{ mod.line }}{% endif %}</span>{% endif %}
       {% if mod.elaborated %}<span class="pill pill-ok" title="Ports and widths resolved by slang elaboration">elaborated</span>{% endif %}
       {% if mod.doc_page %}<a class="pill pill-doc" href="{{ mod.doc_page }}.html">documentation</a>{% endif %}
     </div>

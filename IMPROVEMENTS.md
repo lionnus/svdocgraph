@@ -101,6 +101,28 @@ directory to Pages.
   comment, and `hwpe_stream_source` gives 5.7 kB of reStructuredText.
 - A name of a module in the comment becomes a link. The PULP comments write the
   name in bold, Markdown writes it in backticks; both work.
+- A comment can come from an `include` file. `hci_helpers.svh` ends with
+  ``` `endif /* `ifndef __HCI_HELPERS__ */ ```, and the HCI and common_cells
+  modules took that as their description. The extractor now compares the file of
+  each comment with the file of the module.
+- The comment of an HCI module is above the `include`, and slang puts it in the
+  trivia of that directive. Thus the extractor opens each directive. With the two
+  corrections, pulp-platform/axi gives 120 comments in place of 97, and the
+  datamover gives 12 in place of 6.
+- A block that names the authors only is not a description, thus it is left out.
+
+### The code of each file
+
+- Pygments makes the colours and the line numbers. A page shows one file, because
+  a file can have thousands of lines. The page of a module opens the code at its
+  line, as Sphinx `viewcode`, Doxygen and rustdoc do.
+- Only the root package gives pages. `bender checkout` puts the dependencies in
+  the project, thus the package decides which file to show, and not the path. The
+  code of a dependency has another licence and stays in its own repository.
+- A file with more than 6000 lines keeps its page, but without the colours,
+  because the lexer is slow on a large file. A file of more than 4 MB gets no page.
+- The pages operate without Pygments. The tool then writes the same table, with
+  the line numbers but with no colours.
 
 ### Written documentation
 
