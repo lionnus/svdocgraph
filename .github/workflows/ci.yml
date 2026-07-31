@@ -1,8 +1,11 @@
 name: ci
 
 on:
+  # Each branch, not only the default branch. A branch that does not run the
+  # tests sends no coverage to Codecov, and the report stays empty until the
+  # first merge.
   push:
-    branches: [master, main]
+    branches: ["**"]
   pull_request:
   workflow_dispatch:
 
@@ -50,17 +53,19 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends graphviz
       - run: uv sync --extra dev
       - name: Measure coverage
-        run: uv run --extra dev pytest --cov --cov-report=term-missing --cov-report=xml
+        run: |
+          uv run --extra dev pytest \
+            --cov --cov-branch --cov-report=term-missing --cov-report=xml
       - name: Send the result to Codecov
-        # The token is not necessary for a public repository, but it makes the
-        # upload reliable. Add CODECOV_TOKEN in the repository secrets.
+        # CODECOV_TOKEN is a repository secret. An upload that fails stops this
+        # job, because a silent failure looks the same as a working upload.
         uses: codecov/codecov-action@v5
         if: ${{ !cancelled() }}
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage.xml
-          slug: lionnus/svdocgraph
-          fail_ci_if_error: false
+          files: ./coverage.xml
+          slug: ${{ github.repository }}
+          fail_ci_if_error: true
       - name: Publish the number
         if: always()
         run: |

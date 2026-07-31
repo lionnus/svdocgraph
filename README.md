@@ -2,7 +2,7 @@
 
 [![ci](https://github.com/lionnus/svdocgraph/actions/workflows/ci.yml/badge.svg)](https://github.com/lionnus/svdocgraph/actions/workflows/ci.yml)
 [![integration](https://github.com/lionnus/svdocgraph/actions/workflows/integration.yml/badge.svg)](https://github.com/lionnus/svdocgraph/actions/workflows/integration.yml)
-[![codecov](https://codecov.io/gh/lionnus/svdocgraph/branch/master/graph/badge.svg)](https://codecov.io/gh/lionnus/svdocgraph)
+[![codecov](https://codecov.io/gh/lionnus/svdocgraph/graph/badge.svg)](https://codecov.io/gh/lionnus/svdocgraph)
 [![python](https://img.shields.io/badge/python-3.9%20%E2%80%93%203.13-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
@@ -165,7 +165,7 @@ Bender.yml / Bender.lock
 
 ```sh
 uv sync --extra dev
-uv run pytest                  # 152 tests
+uv run pytest                  # 160 tests
 uv run pytest --cov            # tests with the coverage report
 uv run ruff check .
 ```
@@ -182,7 +182,7 @@ Coverage is 97% of the statements and the branches. There are two controls:
   test. The settings are in `codecov.yml`.
 
 The tests were examined with a mutation experiment: 31 faults were put into the
-code on purpose, one at a time. The tests found 31 of them.
+code on purpose, one at a time. The tests found each of them.
 
 Two workflows operate in CI:
 
