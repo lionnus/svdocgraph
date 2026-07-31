@@ -76,7 +76,13 @@ directory to Pages.
   rendered). Building it caught the interface-classification bug below and the
   swallowed bender errors.
 - Coverage is measured with pytest-cov (statements and branches). It is 97%; the
-  minimum is in `pyproject.toml` and CI enforces it.
+  minimum is in `pyproject.toml` and CI enforces it. Codecov reports the coverage
+  of each pull request.
+- The tests were examined with a mutation experiment: 31 faults were put into the
+  code on purpose, one at a time, and the tests found all of them. The first
+  round of that experiment found six gaps (the side-bar order, the search index,
+  the interface instances, the pages of a dependency module, the localparam
+  filter and the comment length), which now have tests.
 - A project in a directory with a space in its name now works: slang divides a
   command file at each space, so each entry gets quotation marks.
 

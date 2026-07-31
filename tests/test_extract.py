@@ -121,3 +121,9 @@ def test_header_doc_stops_at_a_line_of_code(tmp_path):
     f = tmp_path / "m.sv"
     f.write_text("`define X 1\n// The description.\nmodule m ();\nendmodule\n")
     assert extract._header_doc(str(f), "m") == "The description."
+
+
+def test_a_long_doc_comment_is_shortened(tmp_path):
+    f = tmp_path / "m.sv"
+    f.write_text("// " + "word " * 200 + "\nmodule m ();\nendmodule\n")
+    assert len(extract._header_doc(str(f), "m")) <= 300

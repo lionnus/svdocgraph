@@ -40,7 +40,17 @@ elif argv[:2] == ["script", "flist-plus"]:
     files = sources()
     print("\\n".join(files))
 elif argv[:2] == ["sources", "-f"]:
-    print(json.dumps({"package": "demo_ip", "files": sources()}))
+    # SVDG_STUB_DEP_FILES gives the files of a second package. bender puts the
+    # group of a dependency in the group of the root package.
+    dep = [f for f in os.environ.get("SVDG_STUB_DEP_FILES", "").split(",") if f]
+    root = [f for f in sources() if os.path.basename(f) not in dep]
+    group = {"package": "demo_ip", "files": list(root)}
+    if dep:
+        group["files"].append({
+            "package": "demo_dep",
+            "files": [f for f in sources() if os.path.basename(f) in dep],
+        })
+    print(json.dumps(group))
 else:
     sys.exit(1)
 """
@@ -91,3 +101,10 @@ needs_pyslang = pytest.mark.skipif(
 )
 
 __all__ = ["json", "sys", "needs_dot", "needs_pyslang"]
+
+
+@pytest.fixture
+def stub_bender_with_dependency(stub_bender, monkeypatch):
+    """The same bender, but `demo_adder` belongs to a second package."""
+    monkeypatch.setenv("SVDG_STUB_DEP_FILES", "demo_adder.sv")
+    return stub_bender

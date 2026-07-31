@@ -353,3 +353,45 @@ def test_a_manifest_without_a_package_name_warns(run_cli, project_dir, stub_bend
 def test_init_outside_a_bender_project_warns(run_cli, tmp_path, capsys):
     assert run_cli("init", cwd=tmp_path) == 0
     assert "No Bender.yml" in capsys.readouterr().err
+
+
+def test_interface_instances_are_not_child_modules(run_cli, project_dir, stub_bender):
+    """`demo_bus_if i_bus (...)` is an interface instance, not a submodule."""
+    assert _gen(run_cli, project_dir) == 0
+    model = json.loads((project_dir / project.DEFAULT_OUTPUT / "model.json").read_text())
+    by_name = {i["name"]: i for i in model["modules"]["demo_top"]["instances"]}
+    assert by_name["i_bus"]["is_interface"] is True
+    assert by_name["i_bus"]["module"] == "demo_bus_if"
+    assert by_name["i_adder_a"]["is_interface"] is False
+
+
+def test_every_module_has_a_page(run_cli, project_dir, stub_bender_with_dependency):
+    """A module of a dependency also needs a page, not only a module of the root."""
+    assert _gen(run_cli, project_dir) == 0
+    out = project_dir / project.DEFAULT_OUTPUT
+    model = json.loads((out / "model.json").read_text())
+    packages = {m["package"] for m in model["modules"].values()}
+    assert "demo_dep" in packages, "the fixture must give two packages"
+    for name in model["modules"]:
+        assert (out / f"module-{name}.html").is_file(), f"no page for {name}"
+
+
+def test_search_index_carries_the_ports_and_the_owner(run_cli, project_dir,
+                                                      stub_bender_with_dependency):
+    """The search palette finds a module by a port name, and marks the owner."""
+    assert _gen(run_cli, project_dir) == 0
+    index = json.loads((project_dir / project.DEFAULT_OUTPUT / "design.json").read_text())
+    by_name = {m["name"]: m for m in index["modules"]}
+    assert "sum_o" in by_name["demo_adder"]["ports"]
+    assert by_name["demo_top"]["owned"] is True
+    assert by_name["demo_adder"]["owned"] is False, "demo_adder is in demo_dep"
+    assert by_name["demo_bus_if"]["kind"] == "interface"
+
+
+def test_the_root_package_is_first_in_the_side_bar(run_cli, project_dir,
+                                                   stub_bender_with_dependency):
+    assert _gen(run_cli, project_dir) == 0
+    html = (project_dir / project.DEFAULT_OUTPUT / "index.html").read_text()
+    order = re.findall(r'nav-group[^>]*data-pkg="([^"]+)"', html)
+    assert order[0] == "demo_ip", f"the root package must come first, found {order}"
+    assert "demo_dep" in order

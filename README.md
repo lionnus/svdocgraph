@@ -2,7 +2,7 @@
 
 [![ci](https://github.com/lionnus/svdocgraph/actions/workflows/ci.yml/badge.svg)](https://github.com/lionnus/svdocgraph/actions/workflows/ci.yml)
 [![integration](https://github.com/lionnus/svdocgraph/actions/workflows/integration.yml/badge.svg)](https://github.com/lionnus/svdocgraph/actions/workflows/integration.yml)
-[![coverage](https://img.shields.io/badge/coverage-%E2%89%A595%25-brightgreen)](#development)
+[![codecov](https://codecov.io/gh/lionnus/svdocgraph/branch/master/graph/badge.svg)](https://codecov.io/gh/lionnus/svdocgraph)
 [![python](https://img.shields.io/badge/python-3.9%20%E2%80%93%203.13-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
@@ -174,9 +174,15 @@ The tests use a small design in `tests/fixtures/demo` and a substitute for `bend
 Thus an installation of `bender` is not necessary, and the tests operate on each
 platform.
 
-Coverage is 97% of the statements and the branches. The minimum value is in
-`pyproject.toml`. CI stops with an error if the coverage becomes less than this
-minimum. Do not decrease the minimum to make a failed job pass.
+Coverage is 97% of the statements and the branches. There are two controls:
+
+- `fail_under` in `pyproject.toml` stops a local run and a CI job that goes below
+  the agreed minimum. Do not decrease this value to make a failed job pass.
+- Codecov shows the coverage of each pull request, and which new lines have no
+  test. The settings are in `codecov.yml`.
+
+The tests were examined with a mutation experiment: 31 faults were put into the
+code on purpose, one at a time. The tests found 31 of them.
 
 Two workflows operate in CI:
 

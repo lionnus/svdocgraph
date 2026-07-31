@@ -274,3 +274,35 @@ def test_net_text_falls_back_to_the_source_range():
 
 def test_net_text_survives_a_bad_source_range():
     assert extract._net_text(RangeExpression(11, 9999), BrokenSourceManager()) == ""
+
+
+class Instance:
+    """A substitute for an elaborated instance."""
+
+    def __init__(self, name, body, connections=()):
+        self.name = name
+        self.body = body
+        self.portConnections = list(connections)
+
+
+def test_instance_keeps_the_parameter_overrides_but_not_the_localparams():
+    """A localparam is internal to the module. It is not an override."""
+    body = Body(Definition("demo_adder"),
+                parameters=[Parameter("W", 32), Parameter("Internal", 7, local=True)])
+    inst = extract._instance_from_symbol(Instance("i_a", body), None)
+    assert inst.params == {"W": "32"}
+    assert inst.module == "demo_adder"
+    assert not inst.is_interface
+
+
+def test_an_instance_of_an_interface_is_marked():
+    body = Body(Definition("my_if", kind="Interface"))
+    assert extract._instance_from_symbol(Instance("i_bus", body), None).is_interface
+
+
+def test_instance_connections_are_collected():
+    body = Body(Definition("demo_adder"))
+    conn = PortConnection(port=PortSymbol("a_i", "in"),
+                          expression=NamedValueExpression("x_i"))
+    inst = extract._instance_from_symbol(Instance("i_a", body, [conn]), None)
+    assert [(c.port, c.net) for c in inst.conns] == [("a_i", "x_i")]

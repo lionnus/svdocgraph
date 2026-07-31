@@ -51,6 +51,16 @@ jobs:
       - run: uv sync --extra dev
       - name: Measure coverage
         run: uv run --extra dev pytest --cov --cov-report=term-missing --cov-report=xml
+      - name: Send the result to Codecov
+        # The token is not necessary for a public repository, but it makes the
+        # upload reliable. Add CODECOV_TOKEN in the repository secrets.
+        uses: codecov/codecov-action@v5
+        if: ${{ !cancelled() }}
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          slug: lionnus/svdocgraph
+          fail_ci_if_error: false
       - name: Publish the number
         if: always()
         run: |
