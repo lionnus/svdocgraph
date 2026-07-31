@@ -1,0 +1,143 @@
+name: integration
+
+# Makes documentation for real PULP Platform designs with the true bender.
+#
+# The unit tests use a substitute for bender and a small design. They find the
+# faults in the command-line interface and in the renderer. They cannot find a
+# fault in the elaboration of a large design.
+#
+# Each design has a fixed tag or commit. Thus each run gives the same result, and
+# a change in a design cannot cause a failure in a pull request. The weekly run
+# finds a failure that a new version of bender, pyslang, Graphviz or the runner
+# image causes.
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  schedule:
+    - cron: "0 5 * * 1"     # Mondays, 05:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BENDER_VERSION: 0.28.1
+
+jobs:
+  design:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # An outer-product engine with 14 dependencies. It has floating-point
+          # units from cvfpu, and HCI and hwpe-stream interfaces.
+          - name: opope
+            repo: pulp-platform/opope
+            ref: 76e544bab5f821a199f5f82b80b8ad483bfaaa8f
+            checks: >-
+              --min-modules 35
+              --min-interfaces 2
+              --want-interface hci_core_intf
+              --want-interface hwpe_stream_intf_stream
+              --want-module opope_top
+              --want-module opope_engine
+              --want-module opope_streamer
+              --want-module opope_tiler
+          # An HWPE accelerator. The hwpe-stream, HCI and hwpe-ctrl interfaces
+          # connect an engine to a streamer. Most modules come from a dependency.
+          - name: datamover
+            repo: pulp-platform/datamover
+            ref: f14d4db2a72c08b43b3511013e821a4600f6ef56
+            checks: >-
+              --min-modules 18
+              --min-interfaces 3
+              --want-interface hwpe_stream_intf_stream
+              --want-interface hci_core_intf
+              --want-interface hwpe_ctrl_intf_periph
+              --want-module datamover_top_wrap
+              --want-module datamover_engine
+              --want-module datamover_streamer
+    steps:
+      - name: Check out svdocgraph
+        uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Graphviz
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends graphviz
+
+      - name: Install bender
+        run: |
+          url="https://github.com/pulp-platform/bender/releases/download/v${BENDER_VERSION}"
+          url="${url}/bender-${BENDER_VERSION}-x86_64-linux-gnu-ubuntu22.04.tar.gz"
+          curl -fsSL "$url" -o /tmp/bender.tar.gz
+          sudo tar xzf /tmp/bender.tar.gz -C /usr/local/bin bender
+          bender --version
+
+      - name: Install svdocgraph from the wheel
+        # Use the wheel that a user installs, not the source directory.
+        run: |
+          uv build
+          uv tool install --force dist/*.whl
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: svdocgraph doctor
+        run: svdocgraph doctor
+
+      - name: Check out ${{ matrix.repo }} @ ${{ matrix.ref }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.repo }}
+          ref: ${{ matrix.ref }}
+          path: design
+
+      - name: Resolve dependencies with bender
+        working-directory: design
+        run: bender checkout
+
+      - name: Generate the documentation
+        working-directory: design
+        run: svdocgraph gen -o "$GITHUB_WORKSPACE/site"
+
+      - name: Check the generated site
+        run: |
+          python3 scripts/check_site.py site \
+            --require-graphs --max-diagnostics 0 ${{ matrix.checks }}
+
+      - name: Report what was extracted
+        if: always()
+        run: |
+          [ -f site/model.json ] || exit 0
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, os
+          m = json.load(open("site/model.json"))
+          mods = m["modules"]
+          kinds = {}
+          for mod in mods.values():
+              kinds[mod["kind"]] = kinds.get(mod["kind"], 0) + 1
+          print(f"### {os.environ['DESIGN']} @ {os.environ['DESIGN_REF']}\n")
+          print(f"- root package: `{m['root_package']}`")
+          print(f"- units: {len(mods)} ({', '.join(f'{v} {k}' for k, v in sorted(kinds.items()))})")
+          print(f"- tops: {len(m['tops'])}, packages: {len(m['packages'])}")
+          print(f"- diagnostics: {len(m['diagnostics'])}")
+          for d in m["diagnostics"][:10]:
+              print(f"  - {d}")
+          PY
+        env:
+          DESIGN: ${{ matrix.name }}
+          DESIGN_REF: ${{ matrix.ref }}
+
+      - name: Upload the generated site
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: svdocgraph-${{ matrix.name }}
+          path: site/
+          retention-days: 14

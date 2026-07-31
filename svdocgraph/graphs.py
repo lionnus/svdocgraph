@@ -1,13 +1,10 @@
-"""Graph construction and rendering.
+"""Makes the graphs.
 
-We emit Graphviz DOT and shell out to ``dot`` to lay it out as **inline SVG** with
-clickable nodes, so the reader can traverse the design by clicking - no manual
-diagramming, ever. If ``dot`` is unavailable we degrade to a DOT code block.
+Each function writes Graphviz DOT. Graphviz then calculates the layout and gives
+SVG. The nodes contain links, thus the reader can move through the design.
 
-The marquee graph is the per-module **internal netlist**: the submodules
-instantiated *inside* a module plus the named signals that wire them together
-(and to the module's own ports). That is the "how do the signals connect inside"
-view. We also build the global module hierarchy and the bender package graph.
+There are three graphs: the contents of one module, the design hierarchy, and the
+Bender packages.
 """
 
 from __future__ import annotations
@@ -19,16 +16,16 @@ import subprocess
 
 from .model import Design, _is_clock, _is_reset
 
-# Flat, square palette. Solid fills, no borders, no rounding.
-C_OWNED = "#2563eb"     # owned modules (solid accent)
-C_TOP = "#7c3aed"       # design tops
-C_DEP = "#e2e8f0"       # dependency / black box
+# The colours. Each fill is solid. There are no borders and no round corners.
+C_OWNED = "#2563eb"     # Modules of the root package
+C_TOP = "#7c3aed"       # Design tops
+C_DEP = "#e2e8f0"       # Modules of a dependency, and black boxes
 C_DEP_TXT = "#334155"
-C_IFACE = "#0d9488"     # interfaces
-C_NET = "#ffffff"       # signal/net nodes
+C_IFACE = "#0d9488"     # Interfaces
+C_NET = "#ffffff"       # Signal nodes
 C_NET_TXT = "#475569"
-C_PORT = "#0f172a"      # boundary ports
-C_CLUSTER = "#f1f5f9"   # module boundary block fill
+C_PORT = "#0f172a"      # Ports of the module
+C_CLUSTER = "#f1f5f9"   # Fill of the module boundary
 C_CLUSTER_LINE = "#cbd5e1"
 EDGE = "#94a3b8"
 FONT = "IBM Plex Sans"
@@ -39,12 +36,12 @@ def have_dot() -> bool:
     return shutil.which("dot") is not None
 
 
-def render_dot(dot: str, engine: str = "dot") -> str | None:
+def render_dot(dot: str) -> str | None:
     if not have_dot():
         return None
     try:
         out = subprocess.run(
-            [engine, "-Tsvg"], input=dot, capture_output=True, text=True, check=True
+            ["dot", "-Tsvg"], input=dot, capture_output=True, text=True, check=True
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
         return None
@@ -237,9 +234,8 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
 
 # --- global hierarchy & packages -------------------------------------------
 
-def hierarchy_dot(design: Design, roots: list[str] | None = None,
-                  max_nodes: int = 140) -> str:
-    roots = roots or design.tops or [
+def hierarchy_dot(design: Design, max_nodes: int = 140) -> str:
+    roots = design.tops or [
         n for n, m in design.modules.items() if m.package == design.root_package
     ]
     lines = [_header("LR")]

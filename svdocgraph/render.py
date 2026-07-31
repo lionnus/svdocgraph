@@ -1,8 +1,7 @@
-"""Static-site renderer.
+"""Writes the HTML pages.
 
-Turns the extracted :class:`~svdocgraph.model.Design` into a self-contained,
-offline, modern HTML site (no server required to view). Graphs are inlined as
-clickable SVG; a single ``design.json`` powers instant client-side search.
+The renderer makes a static site from the design model. The site operates offline:
+each graph is inline SVG and the search index is in each page.
 """
 
 from __future__ import annotations
@@ -15,7 +14,7 @@ from datetime import datetime, timezone
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from . import __version__, graphs
+from . import __version__, graphs, project
 from .model import Design, Module
 from .model import reset_polarity as model_reset_polarity
 
@@ -27,17 +26,24 @@ _SVG_WH = re.compile(r'(<svg\b[^>]*?)\s+width="[^"]*"\s+height="[^"]*"', re.S)
 
 
 def _responsive(svg: str | None) -> str | None:
-    """Drop fixed width/height so CSS can size the SVG; tag it for the JS."""
+    """Removes the fixed size of an SVG. Thus the style sheet can scale it."""
     if not svg:
         return None
     svg = _SVG_WH.sub(r"\1", svg, count=1)
     return re.sub(r"<svg\b", '<svg class="svdg-graph"', svg, count=1)
 
 
+def _json_for_script(payload) -> str:
+    """JSON that is safe in an inline `<script>` element."""
+    return (json.dumps(payload, separators=(",", ":"))
+            .replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026"))
+
+
 class Renderer:
-    def __init__(self, design: Design, outdir: str):
+    def __init__(self, design: Design, outdir: str, title: str = ""):
         self.design = design
         self.outdir = outdir
+        self._search_json = "{}"   # replaced in _write_search_index, before any page
         self.env = Environment(
             loader=FileSystemLoader(_TEMPLATES),
             autoescape=select_autoescape(["html"]),
@@ -47,14 +53,15 @@ class Renderer:
         self.env.globals.update(
             tool_version=__version__,
             root_package=design.root_package,
-            project_name=os.path.basename(design.project_root.rstrip("/")) or "design",
+            project_name=(title
+                          or os.path.basename(design.project_root.rstrip("/"))
+                          or "design"),
         )
         self.env.filters["dirbadge"] = _dirbadge
         self.env.filters["reset_polarity"] = model_reset_polarity
 
-    # -- nav ----------------------------------------------------------------
     def _nav(self) -> list[dict]:
-        """Sidebar: modules grouped by package, root package first."""
+        """The side bar. The modules are in groups by package."""
         groups: dict[str, list[Module]] = {}
         for m in self.design.modules.values():
             groups.setdefault(m.package or "(unknown)", []).append(m)
@@ -72,12 +79,18 @@ class Renderer:
         ]
 
     def _ctx(self, **kw):
-        base = {"nav": self._nav(), "design": self.design}
+        base = {
+            "nav": self._nav(),
+            "design": self.design,
+            # The index is in each page. Thus the search operates when the user
+            # opens the page from the disk. A `file://` page cannot read a file.
+            "search_json": self._search_json,
+        }
         base.update(kw)
         return base
 
-    # -- build --------------------------------------------------------------
     def build(self) -> None:
+        """Writes the full site."""
         os.makedirs(self.outdir, exist_ok=True)
         self._clean()
         self._copy_assets()
@@ -89,24 +102,45 @@ class Renderer:
             self._render_module(name)
         for name in self.design.packages:
             self._render_package(name)
+        self._write_build_info()
 
     def _clean(self) -> None:
-        """Remove artifacts from a previous build so stale pages do not linger.
+        """Removes the pages of the last run. Thus no old page stays.
 
-        Only files this tool generates are removed, never the output dir itself.
+        The function removes only the files that have the names that the tool
+        writes. It does not remove the directory or any other file.
         """
+        keep = {"index.html", "hierarchy.html", "packages.html"}
         for fn in os.listdir(self.outdir):
-            if fn.endswith((".html", ".json")):
+            ours = (
+                fn in keep
+                or fn == project.BUILD_INFO
+                or fn in ("design.json", "model.json")
+                or (fn.startswith(("module-", "package-")) and fn.endswith(".html"))
+            )
+            if ours:
                 os.remove(os.path.join(self.outdir, fn))
         assets = os.path.join(self.outdir, "assets")
         if os.path.isdir(assets):
             shutil.rmtree(assets)
+
+    def _write_build_info(self) -> None:
+        project.write_build_info(
+            self.outdir,
+            version=__version__,
+            project_root=self.design.project_root,
+            root_package=self.design.root_package,
+            generated_at=self.design.generated_at,
+            modules=len(self.design.modules),
+            packages=len(self.design.packages),
+        )
 
     def _copy_assets(self) -> None:
         dst = os.path.join(self.outdir, "assets")
         shutil.copytree(_ASSETS, dst, dirs_exist_ok=True)
 
     def _write_search_index(self) -> None:
+        """Writes the search index, and keeps a copy for the pages."""
         idx = []
         for m in self.design.modules.values():
             idx.append({
@@ -126,9 +160,10 @@ class Renderer:
                 for p in self.design.packages.values()
             ],
         }
+        self._search_json = _json_for_script(payload)
         with open(os.path.join(self.outdir, "design.json"), "w") as fh:
             json.dump(payload, fh)
-        # full model for power users / other tools
+        # The full model, for other tools
         with open(os.path.join(self.outdir, "model.json"), "w") as fh:
             json.dump(self.design.to_json(), fh, indent=2)
 
@@ -194,7 +229,7 @@ def _dirbadge(direction: str) -> str:
     }.get(direction, direction)
 
 
-def render_site(design: Design, outdir: str) -> None:
+def render_site(design: Design, outdir: str, title: str = "") -> None:
     design.generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     design.tool_version = __version__
-    Renderer(design, outdir).build()
+    Renderer(design, outdir, title=title).build()

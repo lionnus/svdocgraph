@@ -5,8 +5,8 @@ dist/
 __pycache__/
 *.py[cod]
 
-# Generated documentation sites
-svdocgraph_site/
+# Generated documentation
+.svdocgraph/
 public/
 *.svdocgraph.json
 
@@ -14,3 +14,6 @@ public/
 .venv/
 .ruff_cache/
 .pytest_cache/
+.coverage
+coverage.xml
+htmlcov/

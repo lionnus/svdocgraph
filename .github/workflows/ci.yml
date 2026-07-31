@@ -1,0 +1,122 @@
+name: ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv run --extra dev ruff check .
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The lowest version is the one in pyproject.toml. The highest version is
+        # the newest one that pyslang gives a wheel for.
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install Graphviz
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends graphviz
+      - run: uv sync --extra dev --python ${{ matrix.python }}
+      - run: uv run --extra dev --python ${{ matrix.python }} pytest -v
+
+  coverage:
+    # The minimum is in pyproject.toml. It is also the number on the README badge.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install Graphviz
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends graphviz
+      - run: uv sync --extra dev
+      - name: Measure coverage
+        run: uv run --extra dev pytest --cov --cov-report=term-missing --cov-report=xml
+      - name: Send the result to Codecov
+        # The token is not necessary for a public repository, but it makes the
+        # upload reliable. Add CODECOV_TOKEN in the repository secrets.
+        uses: codecov/codecov-action@v5
+        if: ${{ !cancelled() }}
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          slug: lionnus/svdocgraph
+          fail_ci_if_error: false
+      - name: Publish the number
+        if: always()
+        run: |
+          uv run --extra dev python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import xml.etree.ElementTree as ET
+          root = ET.parse("coverage.xml").getroot()
+          line = float(root.get("line-rate", 0)) * 100
+          branch = float(root.get("branch-rate", 0)) * 100
+          print("### Coverage\n")
+          print(f"- lines: {line:.1f}%")
+          print(f"- branches: {branch:.1f}%")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-xml
+          path: coverage.xml
+
+  package:
+    # A user installs the wheel, not the source directory. Thus this job builds the
+    # wheel, installs it, and runs the installed command.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install Graphviz
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends graphviz
+      - run: uv build
+      - name: Install the wheel into a clean environment
+        run: |
+          uv venv /tmp/clean
+          uv pip install --python /tmp/clean/bin/python dist/*.whl
+      - name: The wheel must contain the templates, the assets and the fonts
+        run: |
+          /tmp/clean/bin/python - <<'PY'
+          import pathlib, svdocgraph
+          pkg = pathlib.Path(svdocgraph.__file__).parent
+          missing = [p for p in ("templates/base.html", "templates/module.html",
+                                 "assets/style.css", "assets/app.js",
+                                 "assets/fonts/plex-sans-400.woff2")
+                     if not (pkg / p).is_file()]
+          assert not missing, f"missing from wheel: {missing}"
+          print("wheel contents OK")
+          PY
+      - name: The installed command runs
+        run: |
+          /tmp/clean/bin/svdocgraph --version
+          /tmp/clean/bin/svdocgraph --help
+      - name: doctor reports the bender that is not available
+        run: |
+          set +e
+          out=$(/tmp/clean/bin/svdocgraph doctor); rc=$?
+          echo "$out"
+          [ $rc -eq 3 ] || { echo "expected exit 3 without bender, got $rc"; exit 1; }
+          echo "$out" | grep -q "cargo install bender" || { echo "no install hint"; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/

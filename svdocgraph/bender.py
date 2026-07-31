@@ -1,18 +1,15 @@
-"""Bender integration.
+"""Reads the project data from bender.
 
-SVDocGraph is *Bender-aware*: instead of asking the user to list source files and
-include directories, it drives `bender` directly to learn the full source set, the
-include dirs, the macro defines, and - crucially - which dependency package every
-file belongs to. That package map is what powers the provenance / ownership views.
-
-Everything here degrades gracefully: if `bender` is missing or a command fails we
-return empty structures and record a diagnostic rather than crashing.
+The user does not list the source files. The tool asks bender for them, and also
+for the include directories, the macro definitions, and the package that owns each
+file. The package data gives each module its origin in the documentation.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -24,26 +21,50 @@ from .model import BenderPackage
 
 @dataclass
 class BenderInfo:
-    """Everything we learn from bender for one project."""
+    """The data that bender gives for one project."""
 
     root_package: str = ""
-    flist_plus: str = ""                       # text of `bender script flist-plus`
+    flist_plus: str = ""                       # Output of `bender script flist-plus`
     file_to_package: dict[str, str] = field(default_factory=dict)
     packages: dict[str, BenderPackage] = field(default_factory=dict)
-    root_files: list[str] = field(default_factory=list)   # files owned by root pkg
+    root_files: list[str] = field(default_factory=list)   # Files of the root package
     diagnostics: list[str] = field(default_factory=list)
+    #: The message from bender if it cannot describe the project. Usually a
+    #: dependency that bender cannot resolve.
+    failure: str = ""
 
 
 def have_bender() -> bool:
     return shutil.which("bender") is not None
 
 
-def _run(args: list[str], cwd: str) -> str | None:
+def _run(args: list[str], cwd: str) -> tuple[str | None, str]:
+    """Runs a bender command. Gives (output, error). The output is None on a failure.
+
+    bender writes a clear message on a failure. Thus the tool keeps that message.
+    """
     try:
         out = subprocess.run(args, cwd=cwd, capture_output=True, text=True, check=True)
-        return out.stdout
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return None
+    except subprocess.CalledProcessError as exc:
+        return None, _clean_error(exc.stderr or exc.stdout or "")
+    return out.stdout, ""
+
+
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _clean_error(text: str) -> str:
+    """Keeps only the part of the bender output that gives the cause.
+
+    bender puts colours and progress messages in the same output. Thus this
+    function removes the colours and starts at the first `error:` line.
+    """
+    lines = [_ANSI.sub("", ln).rstrip() for ln in text.strip().splitlines()]
+    lines = [ln for ln in lines if ln.strip()]
+    for i, ln in enumerate(lines):
+        if ln.lstrip().lower().startswith("error"):
+            return "\n".join(lines[i:i + 6])
+    return "\n".join(lines[-6:])
 
 
 def _read_root_name(project_root: str) -> str:
@@ -57,7 +78,7 @@ def _read_root_name(project_root: str) -> str:
 
 
 def _parse_lock(project_root: str, packages: dict[str, BenderPackage]) -> None:
-    """Enrich packages with locked revision / source from Bender.lock."""
+    """Adds the revision and the source of each package from Bender.lock."""
     path = os.path.join(project_root, "Bender.lock")
     try:
         with open(path) as fh:
@@ -68,7 +89,7 @@ def _parse_lock(project_root: str, packages: dict[str, BenderPackage]) -> None:
         pkg = packages.setdefault(name, BenderPackage(name=name))
         src = entry.get("source") or {}
         if isinstance(src, dict):
-            # source is e.g. {"Git": "https://..."} or {"Path": "..."}
+            # The source is {"Git": "https://..."} or {"Path": "..."}
             for loc in src.values():
                 pkg.source = str(loc)
         pkg.rev = entry.get("revision") or ""
@@ -77,7 +98,7 @@ def _parse_lock(project_root: str, packages: dict[str, BenderPackage]) -> None:
 
 
 def _flatten_sources(group: dict, root_pkg: str, info: BenderInfo) -> None:
-    """Walk the nested `bender sources` JSON, recording file -> package."""
+    """Reads the JSON from `bender sources`. It gives the package of each file."""
     pkg = group.get("package")
     for f in group.get("files", []):
         if isinstance(f, str):
@@ -90,32 +111,35 @@ def _flatten_sources(group: dict, root_pkg: str, info: BenderInfo) -> None:
 
 
 def collect(project_root: str) -> BenderInfo:
-    """Gather all bender-derived information for *project_root*."""
+    """Collects all the bender data for the project."""
     info = BenderInfo()
     if not have_bender():
-        info.diagnostics.append("`bender` not found on PATH; provenance disabled.")
+        info.diagnostics.append("`bender` is not on the PATH. The pages show no package data.")
         return info
 
     info.root_package = _read_root_name(project_root)
 
-    flist = _run(["bender", "script", "flist-plus"], project_root)
+    flist, err = _run(["bender", "script", "flist-plus"], project_root)
     if flist is None:
-        info.diagnostics.append("`bender script flist-plus` failed.")
-    else:
-        info.flist_plus = flist
+        # Without the file list the tool cannot continue.
+        info.failure = err or "`bender script flist-plus` failed."
+        return info
+    info.flist_plus = flist
 
-    sources = _run(["bender", "sources", "-f"], project_root)
+    sources, err = _run(["bender", "sources", "-f"], project_root)
+    if sources is None and err:
+        info.diagnostics.append(f"`bender sources -f` failed. The pages show no package data:\n{err}")
     if sources:
         try:
             data = json.loads(sources)
-            # `-f` (flat) yields a list of groups; plain `sources` yields one nest.
+            # The `-f` option gives a list of groups.
             groups = data if isinstance(data, list) else [data]
             for g in groups:
                 _flatten_sources(g, info.root_package, info)
         except json.JSONDecodeError:
-            info.diagnostics.append("Could not parse `bender sources -f` JSON.")
+            info.diagnostics.append("The tool cannot read the JSON from `bender sources -f`.")
 
-    # Seed packages from the file map, then enrich from the lockfile.
+    # Make one package for each name, then add the data from the lockfile.
     for name in set(info.file_to_package.values()):
         info.packages.setdefault(name, BenderPackage(name=name))
     if info.root_package:
@@ -129,9 +153,19 @@ def collect(project_root: str) -> BenderInfo:
 
 
 def write_command_file(info: BenderInfo, path: str) -> str | None:
-    """Materialise the bender flist-plus as a slang command file. Returns path."""
+    """Write the bender file list as a slang command file. Returns the path.
+
+    slang divides a command file at each space. Thus each entry has quotation
+    marks. If not, a project in a directory with a space in its name fails.
+    """
     if not info.flist_plus:
         return None
+    lines = []
+    for raw in info.flist_plus.splitlines():
+        entry = raw.strip()
+        if not entry:
+            continue
+        lines.append(entry if entry.startswith('"') else f'"{entry}"')
     with open(path, "w") as fh:
-        fh.write(info.flist_plus)
+        fh.write("\n".join(lines) + "\n")
     return path
