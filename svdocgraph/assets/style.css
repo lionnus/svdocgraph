@@ -62,7 +62,9 @@ kbd { font-family:var(--mono); font-size:.78em; background:var(--bg); color:var(
 .layout { display:grid; grid-template-columns:286px minmax(0,1fr); align-items:start; }
 .sidebar { position:sticky; top:54px; height:calc(100vh - 54px); overflow-y:auto;
   padding:16px 10px 40px; background:var(--bg-2); }
-.content { padding:32px 44px 64px; max-width:1100px; width:100%; }
+/* `min-width:0` lets the column become narrow. Without it a grid item keeps the
+   width of its widest content, and a small screen scrolls to the side. */
+.content { padding:32px 44px 64px; max-width:1100px; width:100%; min-width:0; }
 
 /* ---- sidebar nav ---- */
 .nav-filter { width:100%; padding:9px 12px; margin-bottom:14px; font:inherit; font-size:.9em;
@@ -170,7 +172,11 @@ th.num, td.num { text-align:right; font-variant-numeric:tabular-nums; }
 /* ---- graphs ---- */
 .graph { position:relative; margin:0; background:var(--bg); overflow:hidden; }
 .graph-tall { min-height:50vh; }
-.graph svg.svdg-graph { display:block; width:100%; height:auto; max-height:80vh; cursor:grab; touch-action:none; }
+/* One finger scrolls the page and a tap opens a node. Two fingers pinch to
+   zoom and move the graph: `pinch-zoom` is not in the list, thus the browser
+   gives those events to the page. */
+.graph svg.svdg-graph { display:block; width:100%; height:auto; max-height:80vh;
+  cursor:grab; touch-action:pan-x pan-y; }
 .graph svg.svdg-graph:active { cursor:grabbing; }
 .graph svg.svdg-graph text { font-family:var(--sans); }
 [data-theme="dark"] .graph svg.svdg-graph text { fill:var(--text) !important; }
@@ -213,15 +219,27 @@ th.num, td.num { text-align:right; font-variant-numeric:tabular-nums; }
   display:flex; gap:6px; align-items:center; }
 
 @media (max-width:860px) {
-  .layout { grid-template-columns:1fr; } .sidebar { display:none; }
+  .layout { grid-template-columns:minmax(0,1fr); } .sidebar { display:none; }
   .stat-grid { grid-template-columns:repeat(2,1fr); } .card.cols { grid-template-columns:1fr; }
   .page-head { flex-direction:column; } .topnav { display:none; }
+  /* Each part of the top bar becomes narrow, thus the page does not scroll
+     to the side. */
+  .topbar { padding:0 12px; gap:10px; }
+  .brand-project { display:none; }
+  .topbar-actions { flex:1; min-width:0; justify-content:flex-end; }
+  .searchbtn { flex:1; min-width:0; }
+  .searchbtn kbd { display:none; }
+  .content { padding:20px 16px 48px; }
+  .card-head { flex-direction:column; gap:2px; }
+  .card { padding:16px 14px; }
+  /* A path or a name of a unit has no space in it. */
+  .breadcrumb, h1.mono, .pill-file { overflow-wrap:anywhere; }
 }
 
 /* ---- Written documentation -------------------------------------------- */
-.doc-layout { display: grid; grid-template-columns: 1fr; gap: 18px; }
+.doc-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
 @media (min-width: 1200px) {
-  .doc-layout { grid-template-columns: 1fr 210px; }
+  .doc-layout { grid-template-columns: minmax(0, 1fr) 210px; }
   .doc-layout .doc-toc { order: 2; }
   .doc-layout .prose { order: 1; }
 }
@@ -263,3 +281,19 @@ th.num, td.num { text-align:right; font-variant-numeric:tabular-nums; }
 .module-doc { font-size: 14px; }
 .module-doc > :first-child { margin-top: 0; }
 .module-doc > :last-child { margin-bottom: 0; }
+
+/* ---- The code of a source file ---------------------------------------- */
+.src-card { padding: 0; overflow-x: auto; }
+.src-card .hl { background: none; }
+.src-card table.hltable { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.src-card table.hltable td { padding: 0; vertical-align: top; background: none; }
+.src-card table.hltable tr:hover td { background: none; }
+.src-card pre { margin: 0; padding: 14px 0; font-family: var(--mono); line-height: 1.5;
+  background: none; border: 0; }
+.src-card td.linenos { width: 1%; user-select: none; }
+.src-card td.linenos pre { padding-left: 14px; padding-right: 14px; text-align: right; }
+.src-card td.linenos a { color: var(--muted); text-decoration: none; }
+.src-card td.linenos a:hover { color: var(--accent); }
+.src-card td.code { width: 100%; }
+.src-card td.code pre { padding-left: 16px; padding-right: 16px; }
+a.pill-file:hover { background: var(--accent-weak); color: var(--accent); }

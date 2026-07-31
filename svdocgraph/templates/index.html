@@ -5,7 +5,6 @@
   <div>
     <div class="eyebrow">Bender package</div>
     <h1>{{ root_package }}</h1>
-    <p class="lede">Interactive design map - click any node or module to traverse the hierarchy.</p>
   </div>
 </div>
 
@@ -27,7 +26,7 @@
 {% if design.tops %}
 <section class="card">
   <h2>Design tops</h2>
-  <p class="muted">Owned modules that nothing else instantiates - likely entry points.</p>
+  <p class="muted">No other module of {{ root_package }} instantiates these modules.</p>
   <div class="chiprow">
     {% for t in design.tops %}
     <a class="chip chip-top" href="module-{{ t }}.html">{{ t }}</a>
@@ -45,11 +44,11 @@
   <figure class="graph" data-zoom>{{ hierarchy_svg|safe }}
     <figcaption class="graph-tools">
       <button data-zoom-in>+</button><button data-zoom-out>-</button><button data-zoom-reset>reset</button>
-      <span class="graph-hint">scroll to zoom · drag to pan · click a node to open</span>
+      <span class="graph-hint">scroll or pinch to zoom · drag to move · click a node to open</span>
     </figcaption>
   </figure>
   {% else %}
-  <p class="empty">Graphviz <code>dot</code> not found - install Graphviz to render graphs.</p>
+  <p class="empty">Graphviz is not installed. Install it to get the graphs.</p>
   {% endif %}
 </section>
 

@@ -302,17 +302,48 @@ def link_names(html: str, targets: dict) -> str:
 _RST_MARKS = re.compile(r"^\s*\.\.\s+[a-z_-]+::|:[a-z]+:`", re.M)
 
 
+#: The Doxygen commands. A command starts with `@` or with a backslash.
+_DOXY_MARKS = re.compile(r"[@\\](brief|details|param|return[s]?|retval|note|warning|see)\b")
+_DOXY_PARAM = re.compile(r"^\s*[@\\]param\s*(?:\[[^\]]*\])?\s+(\w+)\s*", re.M)
+_DOXY_LABEL = re.compile(r"^\s*[@\\](return[s]?|retval|note|warning|see|details)\s*", re.M)
+_DOXY_INLINE = re.compile(r"[@\\]([cpba])\s+(\S+)")
+_DOXY_LABELS = {"return": "Returns", "returns": "Returns", "retval": "Returns",
+                "note": "Note", "warning": "Warning", "see": "See", "details": ""}
+
+
+def doxygen_to_markdown(text: str) -> str:
+    """Markdown from a comment that uses the Doxygen commands.
+
+    Doxygen has no parser for SystemVerilog, but many repositories use its
+    commands in the comments. Doxygen reads Markdown, thus the commands become
+    Markdown and the usual renderer makes the HTML.
+    """
+    text = re.sub(r"^\s*[@\\]brief\s*", "", text, flags=re.M)
+    text = _DOXY_PARAM.sub(r"- `\1` — ", text)
+    # The empty line stops Markdown from adding the text to the list above.
+    text = _DOXY_LABEL.sub(lambda m: f"\n**{_DOXY_LABELS[m.group(1).lower()]}:** "
+                           if _DOXY_LABELS[m.group(1).lower()] else "\n", text)
+    return _DOXY_INLINE.sub(
+        lambda m: (f"**{m.group(2)}**" if m.group(1) == "b"
+                   else f"*{m.group(2)}*" if m.group(1) == "a"
+                   else f"`{m.group(2)}`"),
+        text,
+    )
+
+
 def render_comment(text: str) -> str:
     """HTML from the documentation comment of a module.
 
-    The comment is Markdown or reStructuredText. A directive or a role shows
-    which one it is.
+    The comment is Markdown, reStructuredText or Doxygen. A directive or a role
+    shows reStructuredText. A command that starts with `@` shows Doxygen.
     """
     if not text.strip():
         return ""
     try:
         if _RST_MARKS.search(text) and HAVE_RST:
             return _render_rst(text)
+        if _DOXY_MARKS.search(text):
+            text = doxygen_to_markdown(text)
         if HAVE_MARKDOWN:
             return _parser().render(text)
     except Exception:

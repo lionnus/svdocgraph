@@ -15,7 +15,7 @@ import re
 import shutil
 import subprocess
 
-from .model import Design, _is_clock, _is_reset
+from .model import Design, _is_clock, _is_reset, graph_dir
 
 # The colours. Each fill is solid. There are no borders and no round corners.
 C_OWNED = "#2563eb"     # Modules of the root package
@@ -25,7 +25,17 @@ C_DEP_TXT = "#334155"
 C_IFACE = "#0d9488"     # Interfaces
 C_NET = "#ffffff"       # Signal nodes
 C_NET_TXT = "#475569"
-C_PORT = "#0f172a"      # Ports of the module
+# The pins of the module. The colour gives the kind, the shape gives the
+# direction. These are the colours of the port table, thus the two agree.
+C_IN = "#2563eb"        # An input
+C_OUT = "#c81d77"       # An output
+C_IO = "#b45309"        # No direction: the signals go both ways
+
+# `cds` draws about two thirds of the height of its node, and `hexagon` draws the
+# full height. These values give each pin and each signal the same height.
+PIN_CDS = 'shape=cds, height=0.37, margin="0.16,0.0"'
+PIN_HEX = 'shape=hexagon, height=0.25, margin="0.16,0.0"'
+NET_BOX = 'shape=box, height=0.25, margin="0.10,0.0"'
 C_CLUSTER = "#f1f5f9"   # Fill of the module boundary
 C_CLUSTER_LINE = "#cbd5e1"
 EDGE = "#94a3b8"
@@ -82,6 +92,13 @@ def _mod_node(design: Design, name: str, *, focus: bool = False) -> str:
     else:
         a += [f'fillcolor="{C_DEP}"', f'fontcolor="{C_DEP_TXT}"']
     return "[" + ", ".join(a) + "]"
+
+
+def _link(design: Design, unit: str) -> str:
+    """The DOT attributes that make a node open the page of *unit*."""
+    if not unit or unit not in design.modules:
+        return ""
+    return f'href="module-{unit}.html", target="_top", tooltip="{html.escape(unit)}", '
 
 
 def _edge(a: str, b: str, label: str = "", directed: bool = True) -> str:
@@ -162,15 +179,22 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
             if base:
                 add(base, nid, _conn_role(c, child))
 
-    # boundary ports join nets that share their name; interface ports use their
-    # modport to decide whether they are an input (left) or output (right) pin.
-    boundary: dict[str, tuple[str, str]] = {}
+    # The interfaces that the module declares. The signal that carries an
+    # interface links to the declaration of that interface.
+    iface_of = {i.name: i.module for i in mod.interface_instances}
+
+    # A boundary port joins the net that has its name. `graph_dir` gives `in`,
+    # `out` or `` for a port with no direction.
+    boundary: dict[str, dict] = {}
     for p in mod.ports:
         if p.name in nets and not (_is_clock(p.name) or _is_reset(p.name)):
-            d = p.eff_dir
+            d = graph_dir(p)
             role = "driver" if d == "in" else ("load" if d == "out" else "both")
-            side = "in" if d == "in" else "out"
-            boundary[p.name] = (f"p__{p.name}", side)
+            boundary[p.name] = {
+                "dir": d,
+                "iface": p.interface if p.is_interface else "",
+                "is_iface": p.is_interface,
+            }
             nets[p.name].append((f"p__{p.name}", role))
 
     # keep only multi-endpoint nets (actual connections)
@@ -183,12 +207,20 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
     # port doubles as the hub for its net, so no separate signal node is drawn.
     for net in kept_nets:
         if net in boundary:
-            _, side = boundary[net]
-            rank = "min" if side == "in" else "max"
-            ori = "" if side == "in" else "orientation=180, "
+            info = boundary[net]
+            rank = "min" if info["dir"] == "in" else "max"
+            if info["dir"] == "in":
+                shape = f"{PIN_CDS}, "
+            elif info["dir"] == "out":
+                shape = f"{PIN_CDS}, orientation=180, "
+            else:
+                # A hexagon has a point at each end: the signals go both ways.
+                shape = f"{PIN_HEX}, "
+            fill = (C_IFACE if info["is_iface"]
+                    else {"in": C_IN, "out": C_OUT}.get(info["dir"], C_IO))
             lines.append(
-                f'  {{ rank={rank}; "p__{net}" [shape=cds, {ori}'
-                f'label="{html.escape(net)}", fillcolor="{C_PORT}", fontcolor="white", '
+                f'  {{ rank={rank}; "p__{net}" [{shape}{_link(design, info["iface"])}'
+                f'label="{html.escape(net)}", fillcolor="{fill}", fontcolor="white", '
                 "fontsize=10]; }"
             )
     # The module itself is the enclosing block; submodules and signals nest inside.
@@ -212,10 +244,13 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
         )
     for net in kept_nets:
         if net not in boundary:
+            iface = iface_of.get(net, "")
+            fill = C_IFACE if iface else C_NET
+            txt = "white" if iface else C_NET_TXT
             lines.append(
-                f'    "n__{net}" [label="{html.escape(net)}", '
-                f'fillcolor="{C_NET}", fontcolor="{C_NET_TXT}", fontname="{FONT_MONO}", '
-                'fontsize=9, margin="0.08,0.03"];'
+                f'    "n__{net}" [{NET_BOX}, {_link(design, iface)}'
+                f'label="{html.escape(net)}", fillcolor="{fill}", fontcolor="{txt}", '
+                f'fontname="{FONT_MONO}", fontsize=9];'
             )
     lines.append("  }")
     # Wiring: drivers point into the signal (or boundary pin), signals point out
@@ -321,13 +356,17 @@ def file_dot(design: Design, max_nodes: int = 120) -> str:
     keep = sorted(labels)[:max_nodes]
     kept = set(keep)
 
+    # The node of a file opens the code of that file.
+    urls = {s.rel_path: s.url for s in design.sources.values()}
+
     lines = [_header("LR")]
     for f in keep:
         is_owned = f in owned
         fill = C_OWNED if is_owned else C_DEP
         txt = "white" if is_owned else C_DEP_TXT
+        href = f'href="{urls[f]}", target="_top", ' if f in urls else ""
         lines.append(
-            f'  "{f}" [label="{html.escape(labels[f])}", '
+            f'  "{f}" [{href}label="{html.escape(labels[f])}", '
             f'tooltip="{html.escape(f)}", shape=box, '
             f'fillcolor="{fill}", fontcolor="{txt}", fontname="{FONT_MONO}", fontsize=10];'
         )

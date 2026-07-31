@@ -36,6 +36,37 @@ def interface_dir(modport: str) -> str:
     return "inout"
 
 
+#: The name endings that give a direction. The longer ending comes first.
+_DIR_SUFFIX = (("_in", "in"), ("_out", "out"), ("_i", "in"), ("_o", "out"))
+
+
+def name_direction(name: str) -> str:
+    """The direction that the name of a port gives, or `` if it gives none."""
+    n = name.lower()
+    for suffix, direction in _DIR_SUFFIX:
+        if n.endswith(suffix):
+            return direction
+    return ""
+
+
+def graph_dir(port) -> str:
+    """The direction to draw: `in`, `out`, or `` for a port with no direction.
+
+    The language gives the direction of a logic port. An interface port has no
+    direction: the name gives it, and then the modport. An interface port with
+    no other data goes in two directions.
+    """
+    if not port.is_interface:
+        if port.direction in ("in", "out"):
+            return port.direction
+        return name_direction(port.name)
+    named = name_direction(port.name)
+    if named:
+        return named
+    modport = interface_dir(port.modport)
+    return modport if modport in ("in", "out") else ""
+
+
 def reset_polarity(name: str) -> str:
     """The polarity of a reset port, from its name."""
     n = name.lower()
@@ -164,6 +195,24 @@ class DocPage:
 
 
 @dataclass
+class SourceFile:
+    """One source file of the project, with its code as HTML."""
+
+    slug: str
+    rel_path: str              # The path from the project root
+    package: str = ""
+    lines: int = 0
+    bytes: int = 0
+    units: list = field(default_factory=list)   # (name, line) of each unit
+    html: str = ""             # The code, with the colours and the line numbers
+    highlighted: bool = False  # False if the colours are not available
+
+    @property
+    def url(self) -> str:
+        return f"{self.slug}.html"
+
+
+@dataclass
 class BenderPackage:
     """A package from Bender.yml and Bender.lock."""
 
@@ -184,10 +233,19 @@ class Design:
     modules: dict[str, Module] = field(default_factory=dict)
     packages: dict[str, BenderPackage] = field(default_factory=dict)
     tops: list[str] = field(default_factory=list)          # The design tops
+    #: Each source file of the root package. A file that declares a package only
+    #: has no module, thus the modules do not give the full list.
+    source_files: list[str] = field(default_factory=list)
     doc_pages: dict[str, DocPage] = field(default_factory=dict)
+    sources: dict[str, SourceFile] = field(default_factory=dict)
     generated_at: str = ""
     tool_version: str = ""
     diagnostics: list[str] = field(default_factory=list)   # Warnings
 
     def to_json(self) -> dict[str, Any]:
-        return dataclasses.asdict(self)
+        """The model as JSON. The code of each file is not in it, because the
+        HTML of the code is large and the file itself is available."""
+        data = dataclasses.asdict(self)
+        for src in data.get("sources", {}).values():
+            src.pop("html", None)
+        return data

@@ -35,9 +35,14 @@ dependencies). The following works today:
 
 `svdocgraph gen` is the supported way to generate the documentation. It requires
 `bender` and Graphviz (`dot`) on the `PATH`; the slang compiler ships with the
-`pyslang` dependency. To wire it into a project, add a target that runs it (see the
-`docs` example in the README) or run it as a CI job that publishes the output
+`pyslang` dependency. To wire it into a project, add a target that runs it (see
+the `docs` example in the README) or run it as a CI job that publishes the output
 directory to Pages.
+
+`svdocgraph check <dir>` examines the result and gives exit code 1 if it is not
+complete. A design that no longer elaborates gives a site with no module and no
+error, thus a pipeline that only runs `gen` cannot see the failure. The two
+workflows of this repository use the same command as a user does.
 
 ### Project ergonomics
 
@@ -48,8 +53,16 @@ directory to Pages.
 - A build marks its output directory with `.svdocgraph-build.json`; `gen` refuses to
   clean a non-empty directory without that marker unless `--force` is given, and
   only removes files matching its own naming scheme.
-- The search index is inlined into every page, so the site is fully functional when
-  opened over `file://` (a `file://` page cannot `fetch()` `design.json`).
+- The search index is a script that each page loads, thus the search works over
+  `file://` too, where a page cannot `fetch()` a file. It was in each page: on
+  pulp-platform/axi that is 47 kB in each of 220 pages, which made the site 10 MB
+  larger than it is now.
+- The graphs answer to a pinch and to a drag with two fingers. The CSS gives one
+  finger to the browser (`touch-action: pan-x pan-y`), thus the page still scrolls
+  and a tap still opens a node.
+- Below 860 px the side bar goes away and each column gets `min-width: 0`. Without
+  that, a grid column keeps the width of its widest content and the page scrolls
+  to the side. A wide table scrolls in its own box.
 - `svdocgraph.yml` (optional, written by `svdocgraph init`) sets the output
   directory, extra tops and the display name, so `make docs` needs no flags.
 
@@ -96,11 +109,54 @@ directory to Pages.
   licence block, then the documentation block, then often an import, then the
   module. The extractor collects the blocks of each member and gives the last
   one to the next module. A block that gives the licence is left out.
-- A comment with a directive or a role is reStructuredText; the other comments
-  are Markdown. On pulp-platform/hwpe-stream, 33 of the 41 modules give a
-  comment, and `hwpe_stream_source` gives 5.7 kB of reStructuredText.
+- A comment with a directive or a role is reStructuredText. A comment with a
+  command that starts with `@` or with a backslash is Doxygen: `@brief`, `@param`
+  and `@note` become Markdown, then the usual renderer makes the HTML. Doxygen
+  has no parser for SystemVerilog, thus only its comment style is common: `///`
+  and `//!` open a documentation line, and `/*!` opens a block.
+  On pulp-platform/hwpe-stream, 33 of the 41 modules give a comment, and
+  `hwpe_stream_source` gives 5.7 kB of reStructuredText.
 - A name of a module in the comment becomes a link. The PULP comments write the
   name in bold, Markdown writes it in backticks; both work.
+- A comment can come from an `include` file. `hci_helpers.svh` ends with
+  ``` `endif /* `ifndef __HCI_HELPERS__ */ ```, and the HCI and common_cells
+  modules took that as their description. The extractor now compares the file of
+  each comment with the file of the module.
+- The comment of an HCI module is above the `include`, and slang puts it in the
+  trivia of that directive. Thus the extractor opens each directive. With the two
+  corrections, pulp-platform/axi gives 120 comments in place of 97, and the
+  datamover gives 12 in place of 6.
+- A block that names the authors only is not a description, thus it is left out.
+
+### The code of each file
+
+- Pygments makes the colours and the line numbers. A page shows one file, because
+  a file can have thousands of lines. The page of a module opens the code at its
+  line, as Sphinx `viewcode`, Doxygen and rustdoc do.
+- Only the root package gives pages. `bender checkout` puts the dependencies in
+  the project, thus the package decides which file to show, and not the path. The
+  code of a dependency has another licence and stays in its own repository.
+- A file with more than 6000 lines keeps its page, but without the colours,
+  because the lexer is slow on a large file. A file of more than 4 MB gets no page.
+- The pages operate without Pygments. The tool then writes the same table, with
+  the line numbers but with no colours.
+
+### The graphs
+
+- The colour of a pin gives the kind, and the shape gives the direction. Blue is
+  an input, magenta an output, green an interface and orange no direction. These
+  are the colours of the port table, thus the graph and the table agree.
+- The direction of a logic port comes from the declaration. An interface port has
+  no direction in the language: the name gives it (`_i`, `_in`, `_o`, `_out`),
+  then the modport. A port that gives neither is a hexagon: the signals go in two
+  directions. The name comes before the modport, because a person reads the name.
+- `cds` draws about two thirds of the height of its node and `hexagon` draws the
+  full height. Each pin gets the height that makes the two the same.
+- A node opens what it shows: an instance opens the module, an interface port and
+  an interface signal open the interface, and a file opens the code.
+- An element of an instance array has no name of its own. The extractor takes the
+  name from the array, thus `hci_core_intf virt_tcdm [1:0] (...)` and a module
+  array are in the model. Before this, they were not.
 
 ### Written documentation
 

@@ -15,8 +15,11 @@
     <div class="meta-row">
       {% if mod.name in design.tops %}<span class="pill pill-top">top</span>{% endif %}
       {% if mod.package %}<a class="pill pill-pkg" href="package-{{ mod.package }}.html">{{ mod.package }}</a>{% endif %}
-      {% if mod.rel_file %}<span class="pill pill-file mono">{{ mod.rel_file }}{% if mod.line %}:{{ mod.line }}{% endif %}</span>{% endif %}
-      {% if mod.elaborated %}<span class="pill pill-ok" title="Ports and widths resolved by slang elaboration">elaborated</span>{% endif %}
+      {% if mod.rel_file and src_urls.get(mod.rel_file) %}
+      <a class="pill pill-file mono" href="{{ src_urls[mod.rel_file] }}#L-{{ mod.line or 1 }}"
+         title="Read the code">{{ mod.rel_file }}{% if mod.line %}:{{ mod.line }}{% endif %}</a>
+      {% elif mod.rel_file %}<span class="pill pill-file mono">{{ mod.rel_file }}{% if mod.line %}:{{ mod.line }}{% endif %}</span>{% endif %}
+      {% if mod.elaborated %}<span class="pill pill-ok" title="slang resolved the ports and the widths">elaborated</span>{% endif %}
       {% if mod.doc_page %}<a class="pill pill-doc" href="{{ mod.doc_page }}.html">documentation</a>{% endif %}
     </div>
   </div>
@@ -31,7 +34,7 @@
 <section class="card prose module-doc">
   {{ comment_html|safe }}
   {% if mod.doc_page %}
-  <p class="muted">More: <a href="{{ mod.doc_page }}.html">the written page for this module</a>.</p>
+  <p class="muted"><a href="{{ mod.doc_page }}.html">The written page for this module.</a></p>
   {% endif %}
 </section>
 {% endif %}
@@ -39,19 +42,21 @@
 {% if internal_svg %}
 <section class="card">
   <div class="card-head"><h2>Internal connectivity</h2>
-    <span class="muted">submodules inside <b class="mono">{{ mod.name }}</b> and the signals wiring them</span></div>
+    <span class="muted">the submodules of <b class="mono">{{ mod.name }}</b> and the signals between them</span></div>
   <figure class="graph graph-tall" data-zoom>{{ internal_svg|safe }}
     <figcaption class="graph-tools">
       <button data-zoom-in>+</button><button data-zoom-out>-</button><button data-zoom-reset>reset</button>
-      <span class="graph-hint">boxes = instances · grey = signals · scroll to zoom · click a module to open</span>
+      <span class="graph-hint">scroll or pinch to zoom · drag to move · click a node to open</span>
     </figcaption>
   </figure>
-  <p class="graph-legend muted">Clock and reset nets are omitted for clarity - see the Clocks &amp; resets section.</p>
+  <p class="graph-legend muted">Blue: an input. Magenta: an output. Green: an interface.
+  Orange: no direction. A hexagon shows a port that goes in two directions. The clock
+  and the reset nets are not in the graph.</p>
 </section>
 {% elif mod.module_instances %}
 {% else %}
 <section class="card card-flat">
-  <p class="muted">This is a leaf module - no submodules are instantiated inside it.</p>
+  <p class="muted">This module instantiates no other module.</p>
 </section>
 {% endif %}
 
@@ -145,7 +150,6 @@
 {% if mod.interface_instances %}
 <section class="card">
   <h2>Interfaces / streams <span class="pill">{{ mod.interface_instances|length }}</span></h2>
-  <p class="muted">SV interface instances declared in this module (streams and buses).</p>
   <div class="chiprow">
     {% for i in mod.interface_instances %}
     <span class="chip chip-if">{{ i.name }}{% if i.count>1 %} x{{ i.count }}{% endif %}<span class="chip-sub">{% if not i.unknown %}<a href="module-{{ i.module }}.html">{{ i.module }}</a>{% else %}{{ i.module }}{% endif %}</span></span>

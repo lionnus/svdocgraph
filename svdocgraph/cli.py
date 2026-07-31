@@ -15,7 +15,7 @@ import sys
 import tempfile
 import webbrowser
 
-from . import __version__, bender, deps, extract, project
+from . import __version__, bender, check, deps, extract, project
 from .render import render_site
 
 QUIET = False
@@ -136,7 +136,8 @@ def _generate(ctx: Ctx, force: bool) -> int:
     _log(f"Pages → {ctx.rel_out}")
     render_site(design, ctx.outdir, title=ctx.config.name,
                 doc_dirs=ctx.config.doc_dirs if ctx.config.docs_enabled else None,
-                with_docs=ctx.config.docs_enabled)
+                with_docs=ctx.config.docs_enabled,
+                with_sources=ctx.config.sources_enabled)
 
     if ctx.is_default_output:
         touched = project.ensure_gitignored(ctx.outdir)
@@ -256,6 +257,25 @@ def cmd_doctor(args) -> int:
     return 0
 
 
+def cmd_check(args) -> int:
+    """Examines a directory that `gen` made. For a job in a CI pipeline."""
+    problems = check.check(
+        args.site,
+        min_modules=args.min_modules, min_interfaces=args.min_interfaces,
+        min_docs=args.min_docs, min_sources=args.min_sources,
+        max_diagnostics=args.max_diagnostics,
+        want_module=args.want_module, want_interface=args.want_interface,
+        require_graphs=args.require_graphs, require_file_graph=args.require_file_graph,
+    )
+    if problems:
+        _err(f"{args.site} is not complete:")
+        for p in problems:
+            print(f"    {p}", file=sys.stderr)
+        return 1
+    _ok(f"{args.site}: {check.summary(args.site)}")
+    return 0
+
+
 def cmd_dump(args) -> int:
     import json
     rc = _preflight()
@@ -325,6 +345,21 @@ def main(argv=None) -> int:
 
     doc = sub.add_parser("doctor", help="show the status of the necessary programs")
     doc.set_defaults(func=cmd_doctor)
+
+    c = sub.add_parser("check", help="examine a generated directory (for CI)")
+    c.add_argument("site", help="the directory that `gen` wrote")
+    c.add_argument("--min-modules", type=int, default=1)
+    c.add_argument("--min-interfaces", type=int, default=0)
+    c.add_argument("--min-docs", type=int, default=0, help="written pages")
+    c.add_argument("--min-sources", type=int, default=0, help="pages with code")
+    c.add_argument("--max-diagnostics", type=int, default=None)
+    c.add_argument("--want-module", action="append", default=[], metavar="NAME",
+                   help="a module that must be in the result (repeatable)")
+    c.add_argument("--want-interface", action="append", default=[], metavar="NAME",
+                   help="a unit that must be an interface (repeatable)")
+    c.add_argument("--require-graphs", action="store_true")
+    c.add_argument("--require-file-graph", action="store_true")
+    c.set_defaults(func=cmd_check, quiet=False)
 
     d = sub.add_parser("dump", help="emit the extracted design model as JSON")
     common(d, output=False)

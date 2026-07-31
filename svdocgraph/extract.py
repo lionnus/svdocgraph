@@ -72,20 +72,66 @@ def _clean_comment(raw: str) -> str:
     """
     text = raw.strip()
     if text.startswith("/*"):
-        text = text[3:] if text.startswith("/**") else text[2:]
+        # `/*`, `/**` and `/*!` all start a documentation block.
+        text = re.sub(r"^/\*[*!]?", "", text)
         if text.endswith("*/"):
             text = text[:-2]
         lines = [re.sub(r"^\s*\*\s?", "", ln) for ln in text.splitlines()]
     else:
-        lines = [re.sub(r"^\s*//+\s?", "", ln) for ln in text.splitlines()]
+        # `//`, `///`, `//!` and `///<` all start a documentation line.
+        lines = [re.sub(r"^\s*//+[!<]*\s?", "", ln) for ln in text.splitlines()]
     return textwrap.dedent("\n".join(lines)).strip("\n").rstrip()
 
 
-def _comment_blocks(trivia) -> list:
+def _file_of(sm, loc) -> str | None:
+    """The file of a source location, or None if it is not known."""
+    if sm is None or loc is None:
+        return None
+    try:
+        return os.path.realpath(sm.getFileName(loc))
+    except Exception:
+        return None
+
+
+def _trivia_files(trivia, sm) -> list:
+    """The file of each trivia, or None if it is not known.
+
+    An `include` puts the text of another file before the module. slang marks
+    the change of the file on the trivia that ends a run, thus the mark applies
+    to the trivia before it.
+    """
+    files: list = [None] * len(trivia)
+    current = None
+    for i in range(len(trivia) - 1, -1, -1):
+        loc = trivia[i].getExplicitLocation()
+        if loc is not None:
+            current = _file_of(sm, loc)
+        files[i] = current
+    return files
+
+
+def _directive_trivia(triv, sm) -> tuple:
+    """The trivia inside a preprocessor directive, with the file of each one.
+
+    A comment that comes before an `include` or a `define` belongs to that
+    directive, and not to the module. Thus this function opens the directive.
+    """
+    try:
+        token = triv.syntax().getFirstToken()
+        items = list(token.trivia)
+    except Exception:
+        return [], []
+    here = _file_of(sm, token.location)
+    files = _trivia_files(items, sm) if sm is not None else [None] * len(items)
+    return items, [f if f is not None else here for f in files]
+
+
+def _comment_blocks(trivia, sm=None, own_file: str = "") -> list:
     """The comment blocks before a token, in sequence.
 
     Line comments that follow each other are one block. An empty line between
-    them starts a new block.
+    them starts a new block. A comment from an `include` file is not the
+    documentation of this module, thus it is not in the result.
     """
     blocks: list = []
     run: list = []          # The line comments that follow each other
@@ -96,21 +142,51 @@ def _comment_blocks(trivia) -> list:
             blocks.append("\n".join(run))
             run.clear()
 
-    for triv in trivia:
-        kind = str(triv.kind)
-        if "LineComment" in kind:
-            if gap > 1:
+    def walk(items, files, depth):
+        nonlocal gap
+        for triv, from_file in zip(items, files):
+            kind = str(triv.kind)
+            if "Directive" in kind:
+                if depth < 3:
+                    walk(*_directive_trivia(triv, sm), depth + 1)
+                continue
+            if "Comment" in kind and from_file is not None and from_file != own_file:
                 flush()
-            run.append(str(triv.getRawText()))
-            gap = 0
-        elif "BlockComment" in kind:
-            flush()
-            blocks.append(str(triv.getRawText()))
-            gap = 0
-        elif "EndOfLine" in kind:
-            gap += 1
+                continue
+            if "LineComment" in kind:
+                if gap > 1:
+                    flush()
+                run.append(str(triv.getRawText()))
+                gap = 0
+            elif "BlockComment" in kind:
+                flush()
+                blocks.append(str(triv.getRawText()))
+                gap = 0
+            elif "EndOfLine" in kind:
+                gap += 1
+
+    items = list(trivia)
+    files = (_trivia_files(items, sm) if sm is not None and own_file
+             else [None] * len(items))
+    walk(items, files, 0)
     flush()
     return blocks
+
+
+#: A line that names a person: `Authors:`, or `Name <mail@example.com>`.
+_AUTHOR_LINE = re.compile(
+    r"^\s*(authors?|maintainers?)\s*:|^\s*\S[^<>]*<[^@<>\s]+@[^<>\s]+>[.,]?\s*$", re.I
+)
+
+
+def _strip_authors(text: str) -> str:
+    """Removes the lines that name the authors.
+
+    Many PULP files put the authors above the module. The name of a person is
+    not a description of the function.
+    """
+    kept = [ln for ln in text.splitlines() if not _AUTHOR_LINE.match(ln)]
+    return "\n".join(kept).strip("\n").rstrip()
 
 
 def _is_licence(text: str) -> bool:
@@ -142,6 +218,7 @@ def doc_comments(trees) -> dict:
     out: dict = {}
     for tree in trees:
         root = tree.root
+        sm = getattr(tree, "sourceManager", None)
         # A file gives a compilation unit. A single declaration gives that
         # declaration, and then `members` holds the body of the module.
         members = (root.members if type(root).__name__ == "CompilationUnitSyntax"
@@ -152,10 +229,13 @@ def doc_comments(trees) -> dict:
                 first = member.getFirstToken()
             except Exception:
                 continue
-            for block in _comment_blocks(first.trivia):
+            own = _file_of(sm, first.location) or ""
+            for block in _comment_blocks(first.trivia, sm, own):
                 text = _clean_comment(block)
                 if text and not _is_licence(text):
-                    pending.append(text)
+                    text = _strip_authors(text)
+                    if text:
+                        pending.append(text)
             header = getattr(member, "header", None)
             name_tok = getattr(header, "name", None) if header is not None else None
             name = getattr(name_tok, "valueText", "") if name_tok is not None else ""
@@ -178,14 +258,22 @@ def _kind(sym) -> str:
 
 
 def _direct_instances(body) -> list:
-    """The child instances of a module. Includes the generate blocks."""
+    """The child instances of a module, with the name of each one.
+
+    Includes the generate blocks and the arrays. An element of an array has no
+    name of its own, thus the array gives the name to each element.
+    """
     found: list = []
 
-    def walk(scope):
+    def walk(scope, name=""):
         for m in scope:
             k = _kind(m)
             if k == "InstanceSymbol":
-                found.append(m)
+                found.append((m, name or m.name))
+            elif k == "InstanceArraySymbol":
+                # `hci_core_intf virt_tcdm [1:0] (...)` declares an array. Without
+                # this, an interface array and a module array are not in the model.
+                walk(m, name or getattr(m, "name", ""))
             elif k in (
                 "GenerateBlockSymbol",
                 "GenerateBlockArraySymbol",
@@ -276,7 +364,7 @@ def _net_text(expr, sm) -> str:
     return ""
 
 
-def _instance_from_symbol(inst, sm) -> Instance:
+def _instance_from_symbol(inst, sm, name: str = "") -> Instance:
     body = inst.body
     defn = getattr(body, "definition", None)
     module = defn.name if defn is not None else getattr(body, "name", "?")
@@ -292,7 +380,7 @@ def _instance_from_symbol(inst, sm) -> Instance:
         net, modport, is_if = _conn_info(pc, sm)
         conns.append(PortConn(port=pname, net=net, is_interface=is_if, modport=modport))
     return Instance(
-        name=inst.name, module=module, params=params, conns=conns,
+        name=name or inst.name, module=module, params=params, conns=conns,
         is_interface=is_iface,
     )
 
@@ -353,7 +441,7 @@ def _module_from_body(body, sm) -> Module:
             pname = getattr(pkg, "name", "") if pkg is not None else ""
             if pname and pname not in mod.imports:
                 mod.imports.append(pname)
-    raw = [_instance_from_symbol(i, sm) for i in _direct_instances(body)]
+    raw = [_instance_from_symbol(i, sm, name) for i, name in _direct_instances(body)]
     mod.instances = _collapse_instances(raw)
     return mod
 
@@ -439,6 +527,7 @@ def extract_design(
 def _annotate(design: Design, bender: BenderInfo, owned: dict, comments: dict) -> None:
     """Adds the origin, the package, the comments and the parent modules."""
     design.packages = bender.packages
+    design.source_files = [os.path.realpath(f) for f in bender.root_files]
     for name, mod in design.modules.items():
         # The origin of the module
         if mod.file:

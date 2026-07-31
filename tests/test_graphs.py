@@ -212,3 +212,95 @@ def test_the_file_graph_has_no_edge_from_a_file_to_itself(design):
     design.modules["top"].rel_file = "rtl/all.sv"
     design.modules["adder"].rel_file = "rtl/all.sv"
     assert '"rtl/all.sv" -> "rtl/all.sv"' not in graphs.file_dot(design)
+
+
+def test_the_file_graph_opens_the_code_of_a_file(design):
+    from svdocgraph.model import SourceFile
+    design.modules["top"].rel_file = "rtl/top.sv"
+    design.modules["adder"].rel_file = "rtl/adder.sv"
+    design.sources["src-rtl-top-sv"] = SourceFile(slug="src-rtl-top-sv",
+                                                  rel_path="rtl/top.sv")
+    dot = graphs.file_dot(design)
+    assert 'href="src-rtl-top-sv.html"' in dot
+    assert 'href="src-rtl-adder-sv.html"' not in dot, "that file has no page"
+
+
+# -- interfaces in the internal graph ---------------------------------------
+
+
+@pytest.fixture
+def with_interface(design) -> Design:
+    """`top` gets three interface ports and an interface that it declares.
+
+    `bus` has a modport, `data_in` has a name that gives the direction, and
+    `tcdm` gives neither.
+    """
+    d = design
+    d.modules["demo_if"] = Module(name="demo_if", kind="interface", package="demo_ip")
+    for name, modport in (("bus", "master"), ("data_in", "sink"), ("tcdm", "")):
+        d.modules["top"].ports.append(
+            Port(name, "interface", is_interface=True, interface="demo_if",
+                 modport=modport)
+        )
+    d.modules["top"].instances.append(
+        Instance(name="stream", module="demo_if", is_interface=True)
+    )
+    for i, inst in enumerate(d.modules["top"].instances[:2]):
+        inst.conns += [PortConn("bus_i", "bus"), PortConn("d_i", "data_in"),
+                       PortConn("t_io", "tcdm"),
+                       PortConn("s_o" if i == 0 else "s_i", "stream")]
+    return d
+
+
+def test_an_interface_port_with_no_direction_is_a_bidirectional_pin(with_interface):
+    dot = graphs.internal_dot(with_interface, "top")
+    assert '"p__tcdm" [shape=hexagon' in dot, "no modport and no name ending"
+    assert '"p__x_i" [shape=cds' in dot, "`input` gives the direction"
+
+
+def test_the_name_of_an_interface_port_gives_the_direction(with_interface):
+    """`data_in` has the `sink` modport, but the name is what a person reads."""
+    dot = graphs.internal_dot(with_interface, "top")
+    assert "rank=min; \"p__data_in\" [shape=cds, " in dot
+    assert "orientation=180" not in dot.split('"p__data_in"')[0].split("rank=min")[-1]
+
+
+def test_the_modport_gives_the_direction_when_the_name_does_not(with_interface):
+    dot = graphs.internal_dot(with_interface, "top")
+    assert 'rank=max; "p__bus" [shape=cds, height=0.37, margin="0.16,0.0", orientation=180' in dot
+
+
+def test_each_interface_port_keeps_the_colour_of_an_interface(with_interface):
+    dot = graphs.internal_dot(with_interface, "top")
+    for pin in ("p__bus", "p__data_in", "p__tcdm"):
+        attrs = dot.split(f'"{pin}" [')[1].split("]")[0]
+        assert graphs.C_IFACE in attrs, f"{pin} must have the interface colour"
+    logic = dot.split('"p__x_i" [')[1].split("]")[0]
+    assert graphs.C_IN in logic and graphs.C_IFACE not in logic
+
+
+def test_each_pin_and_signal_has_the_same_height(with_interface):
+    dot = graphs.internal_dot(with_interface, "top")
+    assert "shape=cds, height=0.37" in dot
+    assert "shape=hexagon, height=0.25" in dot
+    assert "shape=box, height=0.25" in dot
+
+
+def test_an_interface_port_opens_its_declaration(with_interface):
+    assert 'href="module-demo_if.html"' in graphs.internal_dot(with_interface, "top")
+
+
+def test_a_signal_that_carries_an_interface_opens_its_declaration(with_interface):
+    dot = graphs.internal_dot(with_interface, "top")
+    assert '"n__stream" [shape=box, height=0.25, margin="0.10,0.0", href="module-demo_if.html"' in dot
+    assert graphs.C_IFACE in dot, "the interface has its own colour"
+
+
+def test_a_signal_that_is_not_an_interface_has_no_link(with_interface):
+    dot = graphs.internal_dot(with_interface, "top")
+    assert '"n__mid" [shape=box, height=0.25, margin="0.10,0.0", label=' in dot
+
+
+def test_a_link_needs_a_unit_that_the_tool_found(design):
+    assert graphs._link(design, "") == ""
+    assert graphs._link(design, "not_extracted") == ""

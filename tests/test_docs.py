@@ -293,3 +293,40 @@ def test_a_name_in_bold_becomes_a_link():
     linked = docs.link_names(html, {"demo_adder": "module-demo_adder.html"})
     assert '<a class="xref" href="module-demo_adder.html"><code>demo_adder</code></a>' in linked
     assert "<strong>Name</strong>" in linked
+
+
+# -- the Doxygen commands ---------------------------------------------------
+
+
+def test_a_comment_with_the_doxygen_commands():
+    """Doxygen has no parser for SystemVerilog, but the commands are common."""
+    html = docs.render_comment(
+        "@brief A round-robin arbiter.\n\n"
+        "@param NumIn The number of inputs.\n"
+        "@param DataWidth The width of the data.\n"
+        "@note Set @c LockIn to hold the grant.\n"
+        "@return The index of the winner.\n"
+    )
+    assert "<p>A round-robin arbiter.</p>" in html
+    assert "<code>NumIn</code> — The number of inputs." in html
+    assert "<code>DataWidth</code>" in html
+    assert "<strong>Note:</strong>" in html and "<code>LockIn</code>" in html
+    assert "<strong>Returns:</strong> The index of the winner." in html
+    assert "@" not in html, "each command must become Markdown"
+
+
+def test_the_doxygen_commands_also_start_with_a_backslash():
+    html = docs.render_comment("\\brief A counter.\n\\warning It has no reset.\n")
+    assert "<p>A counter.</p>" in html or "A counter." in html
+    assert "<strong>Warning:</strong>" in html
+
+
+def test_the_doxygen_marks_for_emphasis():
+    md = docs.doxygen_to_markdown("@b bold @a italic @p code @c also_code")
+    assert md == "**bold** *italic* `code` `also_code`"
+
+
+def test_a_comment_without_a_command_is_not_doxygen():
+    """A mail address has an `@`, but it is not a command."""
+    html = docs.render_comment("Ask anna@example.com about the **timing**.")
+    assert "anna@example.com" in html and "<strong>timing</strong>" in html

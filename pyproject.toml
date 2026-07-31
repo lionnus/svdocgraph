@@ -22,6 +22,7 @@ dependencies = [
   "PyYAML>=5.4,<7",   # Bender.yml / Bender.lock parsing
   "markdown-it-py>=3,<5",   # The README and the doc/ pages of the repository
   "docutils>=0.19,<1",      # The reStructuredText pages of a Sphinx project
+  "Pygments>=2.14,<3",      # The colours of the code. 2.14 gives the dark style
 ]
 
 [project.optional-dependencies]

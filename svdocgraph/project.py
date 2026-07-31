@@ -52,6 +52,7 @@ class Config:
     name: str = ""          # The title. The default is the directory name
     doc_dirs: list = field(default_factory=list)   # More directories with Markdown
     docs_enabled: bool = True                      # `docs: false` stops the search
+    sources_enabled: bool = True                   # `sources: false` shows no code
     path: str = ""          # The settings file. Empty if there is none
 
     @property
@@ -90,6 +91,7 @@ def load_config(project_root: str) -> Config:
             name=str(data.get("name") or ""),
             doc_dirs=doc_dirs,
             docs_enabled=enabled,
+            sources_enabled=data.get("sources", True) is not False,
             path=path,
         )
     return Config()
@@ -109,6 +111,8 @@ output: {output}
 
 # The title in the page header. The default is the name of the directory.
 # name: My Design
+
+# `sources: false` makes no page for the code of the files.
 """
 
 
