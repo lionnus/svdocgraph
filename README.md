@@ -12,7 +12,8 @@ repository. The tool writes a web site that joins the text a person wrote with
 the facts that the RTL gives.
 
 **[Open the example site](https://lionnus.github.io/svdocgraph/)** — the
-documentation of [pulp-platform/axi](https://github.com/pulp-platform/axi).
+documentation of the
+[datamover](https://github.com/pulp-platform/datamover) accelerator.
 
 ## What you get
 
@@ -24,6 +25,8 @@ documentation of [pulp-platform/axi](https://github.com/pulp-platform/axi).
   becomes a link to the module.
 - **The Markdown and the reStructuredText of the repository**, in the same site.
   A page with the name of a module attaches to that module.
+- **The code of each file of the repository**, with the colours and a line
+  number. The page of a module opens the code at its line.
 - **Graphs of the hierarchy, the source files and the Bender packages.**
 - **One search** over the modules, the ports, the packages and the text.
 
@@ -65,7 +68,11 @@ output: .svdocgraph
 tops: [my_testbench_top]
 name: My Design
 docs: [manual]             # `false` reads no written documentation
+sources: false             # Makes no page for the code
 ```
+
+The tool shows the code of the root package only. The code of a dependency has
+another licence, thus it stays in its own repository.
 
 If a run fails, `svdocgraph doctor` shows which program is missing. `gen` stops
 with exit code 3 when `bender` is not available, and with 4 when `bender` cannot

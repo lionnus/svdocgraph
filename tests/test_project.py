@@ -152,3 +152,10 @@ def test_the_settings_can_stop_the_documentation(project_dir):
     cfg = project.load_config(str(project_dir))
     assert not cfg.docs_enabled
     assert cfg.doc_dirs == []
+
+
+def test_the_settings_can_stop_the_code(project_dir):
+    (project_dir / "svdocgraph.yml").write_text("sources: false\n")
+    cfg = project.load_config(str(project_dir))
+    assert not cfg.sources_enabled
+    assert cfg.docs_enabled, "the two settings are separate"

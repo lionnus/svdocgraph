@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from . import __version__, docs, graphs, project
+from . import __version__, docs, graphs, project, source
 from .model import Design, Module
 from .model import reset_polarity as model_reset_polarity
 
@@ -41,15 +41,18 @@ def _json_for_script(payload) -> str:
 
 class Renderer:
     def __init__(self, design: Design, outdir: str, title: str = "",
-                 doc_dirs: list | None = None, with_docs: bool = True):
+                 doc_dirs: list | None = None, with_docs: bool = True,
+                 with_sources: bool = True):
         self.design = design
         self.outdir = outdir
         self.doc_dirs = list(doc_dirs or [])
         self.with_docs = with_docs
+        self.with_sources = with_sources
         self._search_json = "{}"   # replaced in _write_search_index, before any page
         self._doc_media: dict = {}
         self._file_dot = ""
         self._has_file_graph = False
+        self._src_urls: dict[str, str] = {}   # rel path -> the page of the code
         self.env = Environment(
             loader=FileSystemLoader(_TEMPLATES),
             autoescape=select_autoescape(["html"]),
@@ -88,8 +91,9 @@ class Renderer:
         base = {
             "nav": self._nav(),
             "doc_nav": docs.order_pages(self.design.doc_pages),
-            "has_files": self._has_file_graph,
+            "has_files": self._has_file_graph or bool(self.design.sources),
             "design": self.design,
+            "src_urls": self._src_urls,
             # The index is in each page. Thus the search operates when the user
             # opens the page from the disk. A `file://` page cannot read a file.
             "search_json": self._search_json,
@@ -105,6 +109,7 @@ class Renderer:
         # The written pages and the file graph must exist before any page, because
         # each page shows them in the side bar.
         self._load_docs()
+        self._load_sources()
         self._file_dot = graphs.file_dot(self.design)
         self._has_file_graph = bool(self._file_dot)
         self._write_search_index()
@@ -115,8 +120,10 @@ class Renderer:
             self._render_module(name)
         for name in self.design.packages:
             self._render_package(name)
-        if self._has_file_graph:
+        if self._has_file_graph or self.design.sources:
             self._render_files()
+        for slug in self.design.sources:
+            self._render_source(slug)
         for slug in self.design.doc_pages:
             self._render_doc(slug)
         docs.copy_media(self._doc_media, self.outdir)
@@ -145,6 +152,23 @@ class Renderer:
         self.design.doc_pages = pages
         self._doc_media = media
 
+    def _load_sources(self) -> None:
+        """Reads the source files of the root package and makes HTML of the code.
+
+        A dependency keeps its code out of the site. `bender checkout` puts the
+        dependencies in the project, thus the package decides, not the path.
+        """
+        if not self.with_sources or not self.design.project_root:
+            return
+        files = list(self.design.source_files) + [
+            m.file for m in self.design.modules.values()
+            if m.file and m.package == self.design.root_package
+        ]
+        self.design.sources = source.collect(
+            self.design.project_root, files, self.design.modules
+        )
+        self._src_urls = {s.rel_path: s.url for s in self.design.sources.values()}
+
     def _clean(self) -> None:
         """Removes the pages of the last run. Thus no old page stays.
 
@@ -158,7 +182,8 @@ class Renderer:
                 or fn == project.BUILD_INFO
                 or fn in ("design.json", "model.json")
                 or fn in ("files.html",)
-                or (fn.startswith(("module-", "package-", "doc-")) and fn.endswith(".html"))
+                or (fn.startswith(("module-", "package-", "doc-", "src-"))
+                    and fn.endswith(".html"))
             )
             if ours:
                 os.remove(os.path.join(self.outdir, fn))
@@ -180,6 +205,10 @@ class Renderer:
     def _copy_assets(self) -> None:
         dst = os.path.join(self.outdir, "assets")
         shutil.copytree(_ASSETS, dst, dirs_exist_ok=True)
+        # Pygments makes the colours of the code. Each style is a file, thus the
+        # tool writes the style that it uses.
+        with open(os.path.join(dst, "code.css"), "w") as fh:
+            fh.write(source.style_css())
 
     def _write_search_index(self) -> None:
         """Writes the search index, and keeps a copy for the pages."""
@@ -205,6 +234,11 @@ class Renderer:
                 {"name": d.title, "url": f"{d.slug}.html", "path": d.rel_path,
                  "text": d.text[:600]}
                 for d in self.design.doc_pages.values()
+            ],
+            "files": [
+                {"name": os.path.basename(s.rel_path), "url": s.url,
+                 "path": s.rel_path, "lines": s.lines}
+                for s in self.design.sources.values()
             ],
         }
         self._search_json = _json_for_script(payload)
@@ -264,23 +298,30 @@ class Renderer:
 
     def _render_files(self) -> None:
         """The graph of the source files and their connections."""
-        files = sorted(
-            {m.rel_file: m for m in self.design.modules.values() if m.rel_file}.items()
-        )
-        rows = []
-        for rel, _ in files:
-            units = sorted(
-                m.name for m in self.design.modules.values() if m.rel_file == rel
-            )
-            pkg = next(
-                (m.package for m in self.design.modules.values() if m.rel_file == rel), ""
-            )
-            rows.append({"path": rel, "units": units, "package": pkg})
+        rows = [
+            {"path": s.rel_path, "units": [u[0] for u in s.units],
+             "package": s.package, "url": s.url, "lines": s.lines}
+            for s in sorted(self.design.sources.values(), key=lambda s: s.rel_path)
+        ]
+        if not rows:
+            # No code on the site. The modules still give the list of the files.
+            rels = sorted({m.rel_file for m in self.design.modules.values() if m.rel_file})
+            for rel in rels:
+                mods = [m for m in self.design.modules.values() if m.rel_file == rel]
+                rows.append({"path": rel, "units": sorted(m.name for m in mods),
+                             "package": mods[0].package, "url": "", "lines": 0})
         html = self.env.get_template("files.html").render(
             **self._ctx(file_svg=_responsive(graphs.render_dot(self._file_dot)),
                         rows=rows, active="files")
         )
         self._write("files.html", html)
+
+    def _render_source(self, slug: str) -> None:
+        src = self.design.sources[slug]
+        html = self.env.get_template("source.html").render(
+            **self._ctx(src=src, active="files")
+        )
+        self._write(f"{slug}.html", html)
 
     def _render_doc(self, slug: str) -> None:
         page = self.design.doc_pages[slug]
@@ -308,8 +349,9 @@ def _dirbadge(direction: str) -> str:
 
 
 def render_site(design: Design, outdir: str, title: str = "",
-                doc_dirs: list | None = None, with_docs: bool = True) -> None:
+                doc_dirs: list | None = None, with_docs: bool = True,
+                with_sources: bool = True) -> None:
     design.generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     design.tool_version = __version__
-    Renderer(design, outdir, title=title, doc_dirs=doc_dirs,
-             with_docs=with_docs).build()
+    Renderer(design, outdir, title=title, doc_dirs=doc_dirs, with_docs=with_docs,
+             with_sources=with_sources).build()

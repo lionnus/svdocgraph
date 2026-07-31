@@ -2,9 +2,10 @@ name: pages
 
 # Publishes the example site to GitHub Pages.
 #
-# The example is pulp-platform/axi, because it has both parts that this tool
-# joins: SystemVerilog interfaces, and a doc/ directory with a written page for
-# each of the large modules.
+# The example is the datamover accelerator. It shows each part that this tool
+# joins: a hierarchy of modules, SystemVerilog interfaces from three
+# dependencies, the documentation comment above each module, the README, and the
+# code of each file of the repository.
 #
 # The repository settings must give "GitHub Actions" as the source of Pages.
 
@@ -27,8 +28,8 @@ concurrency:
 
 env:
   BENDER_VERSION: 0.28.1
-  DEMO_REPO: pulp-platform/axi
-  DEMO_REF: v0.39.10
+  DEMO_REPO: pulp-platform/datamover
+  DEMO_REF: lkesting/konark
 
 jobs:
   build:
@@ -71,15 +72,15 @@ jobs:
       - name: Generate the example
         working-directory: design
         run: |
-          printf 'name: "axi %s - SVDocGraph example"\n' "${DEMO_REF}" > svdocgraph.yml
+          printf 'name: "datamover (%s) - SVDocGraph example"\n' "${DEMO_REF}" > svdocgraph.yml
           svdocgraph gen -o "$GITHUB_WORKSPACE/site"
 
       - name: Check the example
         run: |
           python3 scripts/check_site.py site \
             --require-graphs --require-file-graph --max-diagnostics 0 \
-            --min-modules 120 --min-interfaces 5 --min-docs 5 \
-            --want-interface AXI_BUS --want-module axi_xbar
+            --min-modules 18 --min-interfaces 3 --min-docs 1 --min-sources 8 \
+            --want-interface hci_core_intf --want-module datamover_top
 
       - uses: actions/upload-pages-artifact@v3
         with:

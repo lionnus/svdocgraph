@@ -50,6 +50,7 @@ jobs:
               --want-module opope_tiler
               --min-docs 1
               --require-file-graph
+              --min-sources 10
           # An HWPE accelerator. The hwpe-stream, HCI and hwpe-ctrl interfaces
           # connect an engine to a streamer. Most modules come from a dependency.
           - name: datamover
@@ -66,6 +67,7 @@ jobs:
               --want-module datamover_streamer
               --min-docs 1
               --require-file-graph
+              --min-sources 8
     steps:
       - name: Check out svdocgraph
         uses: actions/checkout@v4
