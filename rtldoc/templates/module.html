@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}{{ mod.name }}{% endblock %}
+{% block content %}
+<div class="breadcrumb">
+  <a href="index.html">{{ project_name }}</a> ›
+  {% if mod.package %}<a href="package-{{ mod.package }}.html">{{ mod.package }}</a> ›{% endif %}
+  <span>{{ mod.name }}</span>
+</div>
+
+<div class="page-head">
+  <div>
+    <div class="eyebrow">{{ mod.kind }}{% if not mod.elaborated %} · source-only{% endif %}</div>
+    <h1 class="mono">{{ mod.name }}</h1>
+    {% if mod.desc and not comment_html %}<p class="lede">{{ mod.desc }}</p>{% endif %}
+    <div class="meta-row">
+      {% if mod.name in design.tops %}<span class="pill pill-top">top</span>{% endif %}
+      {% if mod.package %}<a class="pill pill-pkg" href="package-{{ mod.package }}.html">{{ mod.package }}</a>{% endif %}
+      {% if mod.rel_file and src_urls.get(mod.rel_file) %}
+      <a class="pill pill-file mono" href="{{ src_urls[mod.rel_file] }}#L-{{ mod.line or 1 }}"
+         title="Read the code">{{ mod.rel_file }}{% if mod.line %}:{{ mod.line }}{% endif %}</a>
+      {% elif mod.rel_file %}<span class="pill pill-file mono">{{ mod.rel_file }}{% if mod.line %}:{{ mod.line }}{% endif %}</span>{% endif %}
+      {% if mod.elaborated %}<span class="pill pill-ok" title="slang resolved the ports and the widths">elaborated</span>{% endif %}
+      {% if mod.doc_page %}<a class="pill pill-doc" href="{{ mod.doc_page }}.html">documentation</a>{% endif %}
+    </div>
+  </div>
+  <div class="port-summary">
+    <div><span class="big">{{ mod.n_inputs }}</span><span>in</span></div>
+    <div><span class="big">{{ mod.n_outputs }}</span><span>out</span></div>
+    <div><span class="big">{{ mod.module_instances|length }}</span><span>sub</span></div>
+  </div>
+</div>
+
+{% if comment_html %}
+<section class="card prose module-doc">
+  {{ comment_html|safe }}
+  {% if mod.doc_page %}
+  <p class="muted"><a href="{{ mod.doc_page }}.html">The written page for this module.</a></p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if internal_svg %}
+<section class="card">
+  <div class="card-head"><h2>Internal connectivity</h2>
+    <span class="muted">the submodules of <b class="mono">{{ mod.name }}</b> and the signals between them</span></div>
+  <figure class="graph graph-tall" data-zoom>{{ internal_svg|safe }}
+    <figcaption class="graph-tools">
+      <button data-zoom-in>+</button><button data-zoom-out>-</button><button data-zoom-reset>reset</button>
+      <span class="graph-hint">scroll or pinch to zoom · drag to move · click a node to open</span>
+    </figcaption>
+  </figure>
+  <p class="graph-legend muted">Blue: an input. Magenta: an output. Green: an interface.
+  Orange: no direction. A hexagon shows a port that goes in two directions. The clock
+  and the reset nets are not in the graph.</p>
+</section>
+{% elif mod.module_instances %}
+{% else %}
+<section class="card card-flat">
+  <p class="muted">This module instantiates no other module.</p>
+</section>
+{% endif %}
+
+{% if mod.clocks or mod.resets %}
+<section class="card cols">
+  {% if mod.clocks %}
+  <div>
+    <h2>Clocks</h2>
+    <div class="chiprow">
+      {% for c in mod.clocks %}<span class="chip chip-clk">{{ c.name }}</span>{% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% if mod.resets %}
+  <div>
+    <h2>Resets</h2>
+    <div class="chiprow">
+      {% for r in mod.resets %}<span class="chip chip-rst">{{ r.name }}<span class="chip-sub">{{ r.name|reset_polarity }}</span></span>{% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+
+{% set group_titles = {'in':'Inputs','out':'Outputs','inout':'Bidirectional'} %}
+{% if mod.ports %}
+<section class="card">
+  <h2>Ports <span class="pill">{{ mod.ports|length }}</span></h2>
+  {% for g in ['in','out','inout'] %}
+  {% if ports[g] %}
+  <h3 class="subhead">{{ group_titles[g] }} <span class="muted">{{ ports[g]|length }}</span></h3>
+  <div class="tablewrap">
+  <table class="ports">
+    <thead><tr><th>Dir</th><th>Name</th><th>Type</th><th class="num">Width</th></tr></thead>
+    <tbody>
+      {% for p in ports[g] %}
+      <tr>
+        <td><span class="dir dir-{{ p.eff_dir }}{{ ' dir-if' if p.is_interface }}">{{ p.eff_dir|dirbadge }}</span></td>
+        <td class="mono strong">{{ p.name }}</td>
+        <td class="mono ty">{% if p.is_interface %}<a href="module-{{ p.interface }}.html">{{ p.interface }}</a>{% if p.modport %} <span class="muted">.{{ p.modport }}</span>{% endif %}{% else %}{{ p.type }}{% endif %}</td>
+        <td class="num">{% if p.width %}{{ p.width }}{% else %}-{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+  {% endfor %}
+</section>
+{% endif %}
+
+{% if mod.params %}
+<section class="card">
+  <h2>Parameters <span class="pill">{{ mod.params|length }}</span></h2>
+  <div class="tablewrap">
+  <table class="params">
+    <thead><tr><th>Name</th><th>Resolved value</th></tr></thead>
+    <tbody>
+      {% for p in mod.params %}
+      {% if not p.is_localparam %}
+      <tr><td class="mono strong">{{ p.name }}</td><td class="mono">{{ p.value or '-' }}</td></tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{% if mod.module_instances %}
+<section class="card">
+  <h2>Submodules <span class="pill">{{ mod.module_instances|length }}</span></h2>
+  <div class="tablewrap">
+  <table class="insts">
+    <thead><tr><th>Instance</th><th>Module</th><th class="num">Count</th><th class="num">Conns</th></tr></thead>
+    <tbody>
+      {% for i in mod.module_instances %}
+      <tr>
+        <td class="mono strong">{{ i.name }}{% if i.array %}<span class="muted">[]</span>{% endif %}</td>
+        <td>{% if not i.unknown %}<a class="mono" href="module-{{ i.module }}.html">{{ i.module }}</a>{% else %}<span class="mono blackbox" title="definition not found">{{ i.module }}</span>{% endif %}</td>
+        <td class="num">{% if i.count>1 %}x{{ i.count }}{% else %}1{% endif %}</td>
+        <td class="num muted">{{ i.conns|length }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{% if mod.interface_instances %}
+<section class="card">
+  <h2>Interfaces / streams <span class="pill">{{ mod.interface_instances|length }}</span></h2>
+  <div class="chiprow">
+    {% for i in mod.interface_instances %}
+    <span class="chip chip-if">{{ i.name }}{% if i.count>1 %} x{{ i.count }}{% endif %}<span class="chip-sub">{% if not i.unknown %}<a href="module-{{ i.module }}.html">{{ i.module }}</a>{% else %}{{ i.module }}{% endif %}</span></span>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if mod.instantiated_by or mod.imports %}
+<section class="card cols">
+  {% if mod.instantiated_by %}
+  <div>
+    <h2>Instantiated by</h2>
+    <div class="chiprow">
+      {% for p in mod.instantiated_by %}<a class="chip" href="module-{{ p }}.html">{{ p }}</a>{% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% if mod.imports %}
+  <div>
+    <h2>Imports</h2>
+    <div class="chiprow">
+      {% for p in mod.imports %}<span class="chip chip-pkg">{{ p }}::*</span>{% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

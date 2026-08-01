@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{{ project_name }} overview{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Bender package</div>
+    <h1>{{ root_package }}</h1>
+  </div>
+</div>
+
+<div class="stat-grid">
+  <a class="stat" href="hierarchy.html">
+    <div class="stat-num">{{ stats.modules }}</div><div class="stat-lab">modules</div>
+  </a>
+  <div class="stat">
+    <div class="stat-num">{{ stats.owned }}</div><div class="stat-lab">in {{ root_package }}</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">{{ stats.tops }}</div><div class="stat-lab">design tops</div>
+  </div>
+  <a class="stat" href="packages.html">
+    <div class="stat-num">{{ stats.packages }}</div><div class="stat-lab">dependencies</div>
+  </a>
+</div>
+
+{% if design.tops %}
+<section class="card">
+  <h2>Design tops</h2>
+  <p class="muted">No other module of {{ root_package }} instantiates these modules.</p>
+  <div class="chiprow">
+    {% for t in design.tops %}
+    <a class="chip chip-top" href="module-{{ t }}.html">{{ t }}</a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="card">
+  <div class="card-head">
+    <h2>Hierarchy</h2>
+    <a class="textlink" href="hierarchy.html">full graph →</a>
+  </div>
+  {% if hierarchy_svg %}
+  <figure class="graph" data-zoom>{{ hierarchy_svg|safe }}
+    <figcaption class="graph-tools">
+      <button data-zoom-in>+</button><button data-zoom-out>-</button><button data-zoom-reset>reset</button>
+      <span class="graph-hint">scroll or pinch to zoom · drag to move · click a node to open</span>
+    </figcaption>
+  </figure>
+  {% else %}
+  <p class="empty">Graphviz is not installed. Install it to get the graphs.</p>
+  {% endif %}
+</section>
+
+{% if design.diagnostics %}
+<section class="card card-note">
+  <h2>Extraction notes <span class="pill">{{ design.diagnostics|length }}</span></h2>
+  <ul class="notes">
+    {% for d in design.diagnostics[:30] %}<li>{{ d }}</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

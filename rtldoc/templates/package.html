@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ pkg.name }}{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="index.html">{{ project_name }}</a> › <a href="packages.html">packages</a> › <span>{{ pkg.name }}</span></div>
+<div class="page-head"><div>
+  <div class="eyebrow">Bender package{% if pkg.root %} · root{% endif %}</div>
+  <h1 class="mono">{{ pkg.name }}</h1>
+  <div class="meta-row">
+    {% if pkg.version %}<span class="pill">v{{ pkg.version }}</span>{% endif %}
+    {% if pkg.rev %}<span class="pill pill-file mono">{{ pkg.rev[:12] }}</span>{% endif %}
+  </div>
+  {% if pkg.source %}<p class="lede mono src">{{ pkg.source }}</p>{% endif %}
+</div></div>
+
+<section class="card">
+  <h2>Modules <span class="pill">{{ modules|length }}</span></h2>
+  {% if modules %}
+  <div class="cardgrid">
+    {% for m in modules %}
+    <a class="modcard" href="module-{{ m.name }}.html">
+      <div class="modcard-name mono">{{ m.name }}</div>
+      <div class="modcard-meta">
+        <span class="dir dir-in">{{ m.n_inputs }} in</span>
+        <span class="dir dir-out">{{ m.n_outputs }} out</span>
+        {% if m.module_instances %}<span class="muted">{{ m.module_instances|length }} sub</span>{% endif %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}<p class="empty">The tool found no module in this package.</p>{% endif %}
+</section>
+
+{% if pkg.deps %}
+<section class="card">
+  <h2>Depends on</h2>
+  <div class="chiprow">
+    {% for d in pkg.deps %}<a class="chip chip-pkg" href="package-{{ d }}.html">{{ d }}</a>{% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

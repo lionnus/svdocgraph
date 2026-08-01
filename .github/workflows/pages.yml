@@ -1,0 +1,97 @@
+name: pages
+
+# Publishes the example site to GitHub Pages.
+#
+# The example is the datamover accelerator. It shows each part that this tool
+# joins: a hierarchy of modules, SystemVerilog interfaces from three
+# dependencies, the documentation comment above each module, the README, and the
+# code of each file of the repository.
+#
+# The repository settings must give "GitHub Actions" as the source of Pages.
+
+on:
+  push:
+    branches: [master, main]
+  schedule:
+    - cron: "30 5 * * 1"     # Mondays, after the integration run
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time. A running deployment is not stopped.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  BENDER_VERSION: 0.28.1
+  DEMO_REPO: pulp-platform/datamover
+  DEMO_REF: lkesting/konark
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out rtldoc
+        uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install Graphviz
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends graphviz
+
+      - name: Install bender
+        run: |
+          url="https://github.com/pulp-platform/bender/releases/download/v${BENDER_VERSION}"
+          url="${url}/bender-${BENDER_VERSION}-x86_64-linux-gnu-ubuntu22.04.tar.gz"
+          curl -fsSL "$url" -o /tmp/bender.tar.gz
+          sudo tar xzf /tmp/bender.tar.gz -C /usr/local/bin bender
+
+      - name: Install rtldoc from the wheel
+        run: |
+          uv build
+          uv tool install --force dist/*.whl
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Check out ${{ env.DEMO_REPO }} @ ${{ env.DEMO_REF }}
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ env.DEMO_REPO }}
+          ref: ${{ env.DEMO_REF }}
+          path: design
+
+      - name: Resolve dependencies with bender
+        working-directory: design
+        run: bender checkout
+
+      - name: Generate the example
+        working-directory: design
+        run: |
+          printf 'name: "datamover (%s) - RTLDoc example"\n' "${DEMO_REF}" > rtldoc.yml
+          rtldoc gen -o "$GITHUB_WORKSPACE/site"
+
+      - name: Check the example
+        run: |
+          rtldoc check site \
+            --require-graphs --require-file-graph --max-diagnostics 0 \
+            --min-modules 18 --min-interfaces 3 --min-docs 1 --min-sources 8 \
+            --want-interface hci_core_intf --want-module datamover_top
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

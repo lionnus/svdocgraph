@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Files{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <div class="eyebrow">Design map</div>
+  <h1>Source files</h1>
+  <p class="lede">An edge goes from a file to each file that declares a module or an
+  interface that it instantiates.</p>
+</div></div>
+
+<section class="card">
+  {% if file_svg %}
+  <figure class="graph graph-tall" data-zoom>{{ file_svg|safe }}
+    <figcaption class="graph-tools">
+      <button data-zoom-in>+</button><button data-zoom-out>-</button><button data-zoom-reset>reset</button>
+      <span class="graph-hint">scroll or pinch to zoom · drag to move · click a file to read the code</span>
+    </figcaption>
+  </figure>
+  {% else %}
+  <p class="empty">Graphviz is not installed. Install it to get the graphs.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Files and their units</h2>
+  <div class="tablewrap">
+  <table class="tbl">
+    <thead><tr><th>File</th><th class="num">Lines</th><th>Package</th><th>Units</th></tr></thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td class="mono">{% if row.url %}<a href="{{ row.url }}">{{ row.path }}</a>{% else %}{{ row.path }}{% endif %}</td>
+        <td class="num muted">{{ row.lines or '-' }}</td>
+        <td>{% if row.package %}<a href="package-{{ row.package }}.html">{{ row.package }}</a>{% endif %}</td>
+        <td>
+          {% for u in row.units %}
+          <a class="chip" href="module-{{ u }}.html">{{ u }}</a>
+          {% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

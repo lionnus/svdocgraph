@@ -1,0 +1,99 @@
+[project]
+name = "rtldoc"
+# The version is in rtldoc/__init__.py. One place only, thus the package and
+# the tag cannot disagree.
+dynamic = ["version"]
+description = "Documentation for SystemVerilog projects that use Bender"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Lionnus Kesting", email = "github@lionn.us" }]
+keywords = ["systemverilog", "bender", "documentation", "hardware", "rtl", "slang",
+            "eda", "verilog", "graphviz"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Documentation",
+  "Topic :: Software Development :: Documentation",
+  "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+]
+dependencies = [
+  # SystemVerilog parsing + elaboration (MIT). `Driver` moved to `pyslang.driver`
+  # in 11.0; on 8-10 the extractor finds no driver and yields an empty design, so
+  # the floor is a hard requirement rather than a preference. Capped because the
+  # elaborated-AST API is not stable across majors.
+  "pyslang>=11,<12",
+  "Jinja2>=3.0,<4",   # HTML templating
+  "PyYAML>=5.4,<7",   # Bender.yml / Bender.lock parsing
+  "markdown-it-py>=3,<5",   # The README and the doc/ pages of the repository
+  "docutils>=0.19,<1",      # The reStructuredText pages of a Sphinx project
+  "Pygments>=2.14,<3",      # The colours of the code. 2.14 gives the dark style
+]
+
+[project.optional-dependencies]
+dev = ["ruff", "pytest", "pytest-cov"]
+
+[project.urls]
+Homepage = "https://github.com/lionnus/rtldoc"
+Documentation = "https://lionnus.github.io/rtldoc/"
+Source = "https://github.com/lionnus/rtldoc"
+Issues = "https://github.com/lionnus/rtldoc/issues"
+
+[project.scripts]
+rtldoc = "rtldoc.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.27"]      # 1.27 reads the PEP 639 licence fields
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "rtldoc/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["rtldoc"]
+# Templates, CSS/JS and fonts live inside the package and must ship in the wheel.
+artifacts = [
+  "rtldoc/templates/**",
+  "rtldoc/assets/**",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers --strict-config"
+# Tests import helpers from conftest.py by name.
+pythonpath = ["tests"]
+
+[tool.coverage.run]
+source = ["rtldoc"]
+branch = true
+
+[tool.coverage.report]
+precision = 1
+show_missing = true
+# The minimum that CI enforces. It is also the number on the README badge.
+# Increase it when the tests increase. Do not decrease it to pass a failed job.
+fail_under = 95
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "if __name__ == .__main__.:",
+  "except ImportError:",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+extend-exclude = ["tests/fixtures"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]

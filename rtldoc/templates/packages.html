@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Packages{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <div class="eyebrow">Bender</div>
+  <h1>Dependencies</h1>
+  <p class="lede">The packages that <code>Bender.yml</code> and <code>Bender.lock</code> give.</p>
+</div></div>
+
+<section class="card">
+  <h2>Dependency graph</h2>
+  {% if package_svg %}
+  <figure class="graph" data-zoom>{{ package_svg|safe }}
+    <figcaption class="graph-tools">
+      <button data-zoom-in>+</button><button data-zoom-out>-</button><button data-zoom-reset>reset</button>
+      <span class="graph-hint">click a package to open it</span>
+    </figcaption>
+  </figure>
+  {% else %}<p class="empty">Graphviz is not installed. Install it to get the graphs.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Packages <span class="pill">{{ design.packages|length }}</span></h2>
+  <div class="tablewrap">
+  <table class="pkgs">
+    <thead><tr><th>Package</th><th>Version</th><th>Revision</th><th>Source</th></tr></thead>
+    <tbody>
+      {% for name, p in design.packages|dictsort %}
+      <tr>
+        <td><a class="mono strong" href="package-{{ name }}.html">{{ name }}</a>
+            {% if p.root %}<span class="pill pill-root">root</span>{% endif %}</td>
+        <td class="mono">{{ p.version or '-' }}</td>
+        <td class="mono muted">{{ p.rev[:10] if p.rev else '-' }}</td>
+        <td class="mono muted src">{{ p.source or '-' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

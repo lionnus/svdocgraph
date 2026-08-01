@@ -1,0 +1,19 @@
+# Build / dist
+build/
+dist/
+*.egg-info/
+__pycache__/
+*.py[cod]
+
+# Generated documentation
+.rtldoc/
+public/
+*.rtldoc.json
+
+# Tooling
+.venv/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
