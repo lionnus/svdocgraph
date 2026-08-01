@@ -2,9 +2,10 @@
 
 slang keeps each comment as trivia of the token that follows it. The elaboration
 already parsed each file, thus this module reads the comments from that parse and
-not with a regular expression. A `/** */` block, a `//` run, `///` and `//!` all
-give a comment, and a comment before an `import` or an `include` still belongs to
-the module.
+not with a regular expression.
+
+A `/** */` block, a `//` run, `///` and `//!` each give a comment. A comment
+before an `import` or an `include` still belongs to the module.
 
 `markup` turns the text into HTML.
 """
@@ -156,7 +157,7 @@ def summary(text: str) -> str:
         ln for ln in text.splitlines()
         if ln.strip() and not ln.lstrip().startswith((".. ", ":", "|", "+--", "==="))
     )
-    # Remove the emphasis marks, but not the underscore: it is in each name.
+    # The emphasis marks go away. The underscore stays, because each name has one.
     plain = re.sub(r"[*`]+", "", plain).strip()
     m = re.search(r"^(.{20,200}?[.!?])\s", plain + " ")
     return (m.group(1) if m else plain)[:300].strip()

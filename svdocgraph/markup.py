@@ -82,8 +82,8 @@ def add_anchors(html: str) -> tuple[str, list]:
     def repl(m):
         level, inner = int(m.group(1)), m.group(2)
         anchor = _anchor(inner)
-        # docutils gives the section an identifier. A second element with the same
-        # identifier would make the anchor ambiguous.
+        # docutils gives the section an identifier. A second element with the
+        # same identifier makes the anchor ambiguous.
         if f'id="{anchor}"' in html:
             headings.append((level, _TAG.sub("", inner).strip(), anchor))
             return m.group(0)

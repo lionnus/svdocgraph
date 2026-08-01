@@ -223,13 +223,13 @@ condition. The extractor currently descends into these blocks and flattens them:
 loop copies of an instance are collapsed into a single `name xN` entry, and a
 conditional generate is represented by whichever branch elaborated.
 
-To show them, each generate block would become a nested Graphviz cluster inside the
-existing module-boundary cluster (clusters nest), labelled with the block name and
-its condition, for example `for genvar i in [0:N]` or `if (FEATURE_EN)`. The
-instances created in that block would be drawn inside its cluster. This reuses the
-clustering already used for the module boundary, so the rendering cost is small; the
-main work is preserving the generate nesting in the data model instead of flattening
-it (a `GenerateBlock` node type between `Module` and `Instance`).
+To show them, each generate block becomes a Graphviz cluster inside the cluster of
+the module boundary, because a cluster can hold another cluster. The label gives the
+name of the block and its condition, for example `for genvar i in [0:N]` or
+`if (FEATURE_EN)`. Each instance of that block is then in its cluster. The graph
+needs no new mechanism, thus the cost is small. The work is in the model: it must
+keep the generate blocks, and not make one list of the instances. That needs a
+`GenerateBlock` node between `Module` and `Instance`.
 
 Trade-offs: deeper nesting makes the layout busier for designs with many small
 generate blocks, and a flat `xN` summary is often easier to read for a simple loop.
@@ -251,8 +251,8 @@ effort, good payoff for parameterised or conditionally-built modules.
 - Incremental builds and parallel graph rendering for very large designs.
 - Read the `nav` of `mkdocs.yml` and the `toctree` of `index.rst`, to give the
   pages the sequence that the author chose.
-- Single-file output (`svdocgraph gen --single-file`) producing one self-contained
-  `svdocgraph.html`, for attaching a design map to a review or an email. The site is
-  already offline-capable; this would fold the per-module pages into one document
-  with a hash router.
-- `svdocgraph serve --watch`: rebuild when RTL changes.
+- One file (`svdocgraph gen --single-file`) that holds the full site, to attach a
+  design map to a review or to a mail. The site already operates offline. This step
+  puts each module page in one document, and a hash gives the page.
+- `svdocgraph serve --watch`, which makes the documentation again when the RTL
+  changes.

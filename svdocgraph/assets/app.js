@@ -1,8 +1,9 @@
-/* SVDocGraph - client interactions: theme, nav filter, search palette, graph zoom */
+/* What the pages do in the browser: the theme, the filter of the side bar, the
+   search palette, and the zoom of a graph. */
 (function () {
   "use strict";
 
-  // ---- theme ----
+  // ---- the theme ----
   const root = document.documentElement;
   const saved = localStorage.getItem("svdg-theme");
   if (saved) root.setAttribute("data-theme", saved);
@@ -15,7 +16,7 @@
     localStorage.setItem("svdg-theme", next);
   });
 
-  // ---- sidebar filter ----
+  // ---- the filter of the side bar ----
   const nf = document.getElementById("nav-filter");
   if (nf) nf.addEventListener("input", () => {
     const q = nf.value.trim().toLowerCase();
@@ -30,9 +31,9 @@
     });
   });
 
-  // ---- command palette ----
-  // assets/search.js sets window.SVDG_DATA. A script loads from disk, so the
-  // search works over file:// too, where fetch("design.json") is not allowed.
+  // ---- the search palette ----
+  // assets/search.js sets window.SVDG_DATA. A page loads a script from the disk,
+  // thus the search also operates over file://, where a page cannot fetch a file.
   let DATA = window.SVDG_DATA || { modules: [], packages: [], docs: [], files: [] };
   if (!DATA.modules.length)
     fetch("design.json").then((r) => r.json()).then((d) => { DATA = d; }).catch(() => {});
@@ -123,14 +124,14 @@
   });
   if (pal) pal.addEventListener("click", (e) => { if (e.target === pal) closePal(); });
 
-  // ---- graph pan / zoom ----
+  // ---- the zoom and the move of a graph ----
   document.querySelectorAll(".graph[data-zoom]").forEach((fig) => {
     const svg = fig.querySelector("svg.svdg-graph");
     if (!svg) return;
-    let g = svg.querySelector("g"); // graphviz wraps content in <g class="graph">
+    let g = svg.querySelector("g");   // Graphviz puts the graph in one group
     if (!g) return;
     let scale = 1, tx = 0, ty = 0, panning = false, sx = 0, sy = 0;
-    // capture graphviz's initial transform and build on top of it
+    // Graphviz gives the group a transform. The zoom and the move come after it.
     const base = g.getAttribute("transform") || "";
     function apply() { g.setAttribute("transform", `translate(${tx},${ty}) scale(${scale}) ${base}`); }
     function zoomAt(factor, cx, cy) {
@@ -144,9 +145,9 @@
       zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX, e.clientY);
     }, { passive: false });
 
-    // Touch: one finger scrolls the page and a tap opens a node (the CSS
-    // `touch-action` leaves those to the browser). Two fingers pinch to zoom and
-    // move the graph. Mouse and pen: a drag moves the graph.
+    // With a touch screen, one finger scrolls the page and a tap opens a node:
+    // the CSS `touch-action` leaves those two to the browser. Two fingers pinch
+    // to zoom and move the graph. With a mouse or a pen, a drag moves the graph.
     const touches = new Map();
     let gesture = null;
     const middle = () => {
@@ -165,7 +166,7 @@
         if (touches.size === 2) gesture = { at: middle(), size: spread() };
         return;
       }
-      if (e.target.closest("a")) return; // let node links work
+      if (e.target.closest("a")) return;   // a click on a node opens its page
       panning = true; sx = e.clientX - tx; sy = e.clientY - ty; svg.setPointerCapture(e.pointerId);
     });
     svg.addEventListener("pointermove", (e) => {

@@ -1,9 +1,9 @@
 """Makes the graphs.
 
-Each function gives Graphviz DOT for one view of the design: the contents of one
-module, the design hierarchy, the source files and the Bender packages. A node
-contains a link, thus the reader can move through the design. `dot` holds the
-colours, the DOT syntax and the Graphviz process.
+Each function gives Graphviz DOT for one view of the design. There are four
+views: the contents of one module, the design hierarchy, the source files and the
+Bender packages. A node contains a link, thus the reader can move through the
+design. `dot` holds the colours, the DOT syntax and the Graphviz process.
 """
 
 from __future__ import annotations
@@ -69,7 +69,11 @@ _IDENT = re.compile(r"[A-Za-z_]\w*")
 
 
 def _net_base(expr: str) -> str:
-    """Reduce a connection expression to a groupable net name, or '' to skip."""
+    """The name of the net in a connection expression.
+
+    Gives `` for a constant, a concatenation or a literal, because those are not
+    a net that two instances share.
+    """
     e = (expr or "").strip().lstrip("(").strip()
     if not e or e[0] in "'\"{0123456789":   # constants / concats / literals
         return ""
@@ -148,7 +152,7 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
             }
             nets[p.name].append((f"p__{p.name}", role))
 
-    # keep only multi-endpoint nets (actual connections)
+    # A net with one end only is not a connection. It stays out of the graph.
     nets = {n: eps for n, eps in nets.items() if len({e[0] for e in eps}) >= 2}
 
     kept_nets = sorted(nets)[:max_nodes]
@@ -269,9 +273,10 @@ def package_dot(design: Design) -> str:
 def file_dot(design: Design, max_nodes: int = 120) -> str:
     """A graph of the source files of the root package and their connections.
 
-    An edge goes from a file to each file that it needs: the file of a module
-    that it instantiates, and the file of a package that it imports. This gives
-    the compile sequence and the structure of the repository.
+    An edge goes from a file to each file that it needs. A file needs the file
+    of a module that it instantiates, and the file of a package that it imports.
+    Thus the graph gives the compile sequence and the structure of the
+    repository.
     """
     file_of: dict[str, str] = {}
     for name, mod in design.modules.items():

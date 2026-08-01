@@ -139,7 +139,7 @@ def collect(project_root: str) -> BenderInfo:
         except json.JSONDecodeError:
             info.diagnostics.append("The tool cannot read the JSON from `bender sources -f`.")
 
-    # Make one package for each name, then add the data from the lockfile.
+    # One package for each name. The data of each one comes from Bender.lock.
     for name in set(info.file_to_package.values()):
         info.packages.setdefault(name, BenderPackage(name=name))
     if info.root_package:
@@ -153,7 +153,7 @@ def collect(project_root: str) -> BenderInfo:
 
 
 def write_command_file(info: BenderInfo, path: str) -> str | None:
-    """Write the bender file list as a slang command file. Returns the path.
+    """Writes the file list of bender as a slang command file. Gives the path.
 
     slang divides a command file at each space. Thus each entry has quotation
     marks. If not, a project in a directory with a space in its name fails.

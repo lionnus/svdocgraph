@@ -212,8 +212,8 @@ class Renderer:
 
         A `file://` page cannot read a file with `fetch`, but it can load a
         script. Thus the index is a script, and not JSON that the pages fetch or
-        hold. A design of 150 modules gives an index of 150 kB: in each of the
-        400 pages that is 60 MB, and in one script it is 150 kB.
+        hold. A design of 150 modules gives an index of 150 kB. In each of the
+        400 pages that is 60 MB. In one script it is 150 kB.
         """
         idx = []
         for m in self.design.modules.values():

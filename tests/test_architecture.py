@@ -1,8 +1,9 @@
 """The rules of the package layout.
 
-Each module has one subject. A module imports from a lower layer only. Without a
-test, that rule goes away with the next change: an import is one line, and a
-cycle gives no error until the package is large.
+Each module has one subject. A module imports from a lower layer only.
+
+Without a test, that rule goes away with the next change. An import is one line,
+and a cycle gives no error until the package is large.
 """
 
 from __future__ import annotations
@@ -84,7 +85,7 @@ def test_the_lowest_layer_needs_nothing():
 
 
 def test_no_module_imports_the_package_itself():
-    """`from svdocgraph import x` inside the package would make a cycle."""
+    """`from svdocgraph import x` inside the package makes a cycle."""
     for name in module_names():
         text = (PACKAGE / f"{name}.py").read_text()
         assert "from svdocgraph" not in text, name

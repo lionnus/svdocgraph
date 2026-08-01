@@ -218,7 +218,7 @@ def test_an_include_directive_cannot_read_another_file(tmp_path):
 
 @rst
 def test_a_heading_keeps_the_identifier_that_docutils_made(tmp_path):
-    """Two elements with the same identifier would make the anchor ambiguous."""
+    """Two elements with the same identifier make the anchor ambiguous."""
     (tmp_path / "a.rst").write_text(RST_PAGE)
     pages, _ = docs.build_pages(str(tmp_path), ["a.rst"])
     html = pages["doc-a"].html

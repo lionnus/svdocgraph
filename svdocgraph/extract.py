@@ -5,13 +5,13 @@ elaborated tree directly.
 
 The sequence is:
 
-1. Read the source set and the files of the root package from bender.
-2. Find the module names in those files with a regular expression. Give these
-   names to slang as tops. Thus each module elaborates, also a module that no
+1. The tool reads the source set and the files of the root package from bender.
+2. It finds the module names in those files with a regular expression. Those
+   names go to slang as tops. Thus each module elaborates, also a module that no
    other module instantiates.
-3. Elaborate one time. Then walk the instance tree of each top and make one
-   Module for each definition.
-4. If slang cannot elaborate a module of the root package, make a page from the
+3. It elaborates one time. Then it walks the instance tree of each top, and
+   makes one Module for each definition.
+4. A module of the root package that slang cannot elaborate gets a page from the
    source text only.
 
 A module that fails gives a diagnostic. It does not stop the run.
@@ -133,9 +133,9 @@ def _conn_info(pc, sm) -> tuple[str, str, bool]:
                 modport = getattr(ic[1], "name", "") or ""
             if ic[0] is not None:
                 fallback = getattr(ic[0], "name", "") or ""
-        # Use the source text first. It has the true net name. `ifaceConn` gives
-        # the name of the interface type for a boundary port. That name would
-        # make one net from two different streams.
+        # The source text comes first, because it has the true net name.
+        # `ifaceConn` gives the name of the interface type for a boundary port,
+        # which makes one net from two different streams.
         return _net_text(expr, sm) or fallback, modport, True
     return _net_text(expr, sm), "", False
 
@@ -293,7 +293,8 @@ def extract_design(
     comp = driver.createCompilation()
     sm = comp.sourceManager
 
-    # Walk the instance tree of each top. Keep one module for each definition.
+    # The walk goes down the instance tree of each top. Each definition gives
+    # one module.
     seen: set[str] = set()
 
     def visit(sym):
@@ -346,7 +347,8 @@ def _annotate(design: Design, bender: BenderInfo, owned: dict, comments: dict) -
             mod.doc_comment = comment
             if not mod.desc.startswith("("):
                 mod.desc = summary(comment)
-    # reverse edges + unknown flagging (module hierarchy only, skip interfaces)
+    # The parent modules, and the flag for a module that the tool did not find.
+    # An interface is not part of the hierarchy.
     known = set(design.modules)
     for name, mod in design.modules.items():
         for inst in mod.instances:

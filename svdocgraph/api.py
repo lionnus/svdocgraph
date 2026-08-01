@@ -15,7 +15,7 @@ from .render import render_site
 
 
 class BenderFailed(Exception):
-    """bender could not describe the project. The message comes from bender."""
+    """bender cannot describe the project. The message comes from bender."""
 
 
 def _no_log(message: str) -> None:

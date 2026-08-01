@@ -116,7 +116,8 @@ def collect(project_root: str, files, modules: dict) -> dict[str, SourceFile]:
     """Reads each source file in the project and makes the HTML of its code.
 
     *files* gives more paths than the modules do, because a file can declare a
-    package only. A file outside the project root is a dependency. It is skipped.
+    package only. A file outside the project root is a dependency, thus the tool
+    does not read it.
     """
     root = os.path.realpath(project_root)
     by_rel: dict[str, str] = {}

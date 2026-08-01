@@ -111,7 +111,7 @@ def test_unknown_symbols_are_skipped():
 
 def test_interface_connection_prefers_the_source_text():
     """For a boundary port, `ifaceConn` gives the name of the interface type.
-    That name would make one net from two different streams."""
+    That name makes one net from two different streams."""
     pc = PortConnection(
         port=InterfacePortSymbol("bus", Named("AXI_BUS")),
         expression=NamedValueExpression("i_dma_bus"),

@@ -1,8 +1,8 @@
 """Examines a documentation directory that the tool made.
 
 A job in a CI pipeline runs `svdocgraph check`. The command makes sure that the
-run gave the expected result, and not an empty site: a design that no longer
-elaborates gives a site with no module, and the pipeline must stop.
+run gave the expected result, and not an empty site. A design that no longer
+elaborates gives a site with no module. The pipeline must then stop.
 """
 
 from __future__ import annotations

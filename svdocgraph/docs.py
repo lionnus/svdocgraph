@@ -96,8 +96,9 @@ def find_files(project_root: str, extra_dirs: list[str] | None = None) -> list[s
         base = os.path.normpath(os.path.join(project_root, name))
         if not os.path.isdir(base):
             continue
-        # The root holds the source of the whole repository. Read only the files
-        # that are directly in it, not the files of each subdirectory.
+        # The root holds the source of the whole repository. Only the files that
+        # are directly in it are documentation, and not the files of each
+        # subdirectory.
         if os.path.normpath(base) == os.path.normpath(project_root):
             walk = [(base, [], sorted(os.listdir(base)))]
         else:

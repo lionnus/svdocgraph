@@ -56,7 +56,7 @@ def test_internal_graph_shows_instances_and_the_net_between_them(design):
 
 
 def test_internal_graph_omits_clocks_and_resets(design):
-    """A clock net touches each instance. It would hide the data flow."""
+    """A clock net touches each instance. It hides the data flow."""
     dot = graphs.internal_dot(design, "top")
     assert "clk_i" not in dot
     assert "rst_ni" not in dot
