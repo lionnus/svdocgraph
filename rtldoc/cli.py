@@ -55,7 +55,6 @@ class Ctx:
         out = (getattr(args, "output", None) if use_output else None) or self.config.output
         self.outdir = out if os.path.isabs(out) else os.path.join(self.root, out)
         self.outdir = os.path.abspath(self.outdir)
-        self.is_default_output = not use_output or getattr(args, "output", None) is None
         self.tops = list(dict.fromkeys(self.config.tops + (getattr(args, "top", None) or [])))
 
     @property
@@ -123,12 +122,6 @@ def _generate(ctx: Ctx, force: bool) -> int:
                 doc_dirs=ctx.config.doc_dirs if ctx.config.docs_enabled else None,
                 with_docs=ctx.config.docs_enabled,
                 with_sources=ctx.config.sources_enabled)
-
-    if ctx.is_default_output:
-        touched = project.ensure_gitignored(ctx.outdir)
-        if touched:
-            _log(f"Added {os.path.basename(ctx.outdir)}/ to the "
-                 f"{os.path.relpath(touched, os.getcwd())}")
 
     _ok(f"The documentation is ready in \033[1m{ctx.rel_out}\033[0m")
     _log(f"To open it: rtldoc open   ({project.index_url(ctx.outdir)})")

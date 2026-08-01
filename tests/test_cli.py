@@ -53,14 +53,22 @@ def test_gen_extracts_the_expected_design(run_cli, project_dir, stub_bender):
 
 def test_gen_is_idempotent(run_cli, project_dir, stub_bender):
     assert _gen(run_cli, project_dir) == 0
-    before = (project_dir / ".gitignore").read_text()
+    first = sorted(p.name for p in (project_dir / project.DEFAULT_OUTPUT).iterdir())
     assert _gen(run_cli, project_dir) == 0
-    assert (project_dir / ".gitignore").read_text() == before
+    assert sorted(p.name for p in (project_dir / project.DEFAULT_OUTPUT).iterdir()) == first
 
 
-def test_gen_adds_a_gitignore_rule(run_cli, project_dir, stub_bender):
+def test_gen_changes_no_file_of_the_project(run_cli, project_dir, stub_bender):
+    """`gen` writes the output directory only. The `.gitignore` file of a
+    repository belongs to the person who owns that repository."""
+    before = {p: p.read_bytes() for p in project_dir.rglob("*")
+              if p.is_file() and ".git" not in p.parts}
     assert _gen(run_cli, project_dir) == 0
-    assert "/.rtldoc/" in (project_dir / ".gitignore").read_text()
+    after = {p: p.read_bytes() for p in project_dir.rglob("*")
+             if p.is_file() and ".git" not in p.parts
+             and project.DEFAULT_OUTPUT not in p.parts}
+    assert after == before, "gen must not write outside its output directory"
+    assert not (project_dir / ".gitignore").exists()
 
 
 def test_gen_refuses_a_foreign_output_directory(run_cli, project_dir, stub_bender):

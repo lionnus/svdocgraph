@@ -48,8 +48,10 @@ workflows of this repository use the same command as a user does.
 
 - The project root is found by walking up to the nearest `Bender.yml`, so the tool
   works from any subdirectory.
-- Output defaults to `.rtldoc/` in the project root, and the first build adds
-  that directory to the repository `.gitignore`.
+- Output defaults to `.rtldoc/` in the project root. `gen` writes that directory
+  and nothing else: a tool must not change a file of a repository that it only
+  reads. `rtldoc init` adds the `/.rtldoc/` rule to `.gitignore`, because a person
+  who runs `init` asks for the setup.
 - A build marks its output directory with `.rtldoc-build.json`; `gen` refuses to
   clean a non-empty directory without that marker unless `--force` is given, and
   only removes files matching its own naming scheme.

@@ -34,29 +34,21 @@ from the source text.
 
 ## 1. Read a repository that you do not know
 
-Copy this into a terminal. Remove the lines for the tools that you have.
-
 ```sh
-# The tools. Graphviz is the only line that changes with the operating system.
-curl -LsSf https://astral.sh/uv/install.sh | sh              # uv
-curl https://pulp-platform.github.io/bender/init -sSf | sh   # bender
-sudo apt install -y graphviz                                 # macOS: brew install graphviz
-
 uv tool install rtldoc          # or: pipx install rtldoc
-
-# The design. Use the path of any repository that has a Bender.yml.
-cd ~/my-bender-project
-bender checkout                     # only if the dependencies are not there yet
+cd my-bender-project
 rtldoc gen --open
 ```
 
 The tool finds the nearest `Bender.yml`, elaborates each module of the root
-package, writes `.rtldoc/` and opens it in the browser. It adds that
-directory to your `.gitignore`. A simulator is not necessary.
+package, writes `.rtldoc/` and opens it in the browser. It changes no other file.
+To keep the output out of your commits, add `/.rtldoc/` to `.gitignore`, or let
+`rtldoc init` do it.
 
-`uv tool upgrade rtldoc` gets a later version. To read or change the code,
-clone this repository and install that directory:
-`uv tool install --force ~/rtldoc`.
+Two other programs must be on the `PATH`: `bender`, and
+[Graphviz](https://graphviz.org/) for the graphs. **`rtldoc doctor` names the ones
+that are missing, and gives the command to install each one.** A simulator is not
+necessary.
 
 In the site: **Overview** gives the tops, **Hierarchy** gives the structure,
 **Files** gives the compile order and the code, and a module page gives the ports

@@ -152,9 +152,10 @@ def _is_ignored(repo: str, target: str) -> bool:
 def ensure_gitignored(outdir: str) -> str | None:
     """Keeps the output directory out of the commits.
 
-    Adds a rule to the `.gitignore` file of the repository. Does nothing if the
-    directory is not in a repository, or if git ignores it. Gives the path of the
-    changed file, or None.
+    Adds a rule to the `.gitignore` file of the repository. Only `rtldoc init`
+    calls this function: `gen` must not change a file that it does not own.
+    Does nothing if the directory is not in a repository, or if git ignores it
+    already. Gives the path of the changed file, or None.
     """
     outdir = os.path.abspath(outdir)
     repo = git_root(os.path.dirname(outdir))
