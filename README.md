@@ -41,8 +41,9 @@ rtldoc gen --open
 ```
 
 The tool finds the nearest `Bender.yml`, elaborates each module of the root
-package, writes `.rtldoc/` and opens it in the browser. It adds that directory to
-your `.gitignore`.
+package, writes `.rtldoc/` and opens it in the browser. It changes no other file.
+To keep the output out of your commits, add `/.rtldoc/` to `.gitignore`, or let
+`rtldoc init` do it.
 
 Two other programs must be on the `PATH`: `bender`, and
 [Graphviz](https://graphviz.org/) for the graphs. **`rtldoc doctor` names the ones
