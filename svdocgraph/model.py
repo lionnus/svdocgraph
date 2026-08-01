@@ -1,80 +1,17 @@
 """The design data.
 
 The extractor fills these classes. The renderer reads them. Each class is plain
-data, thus the tool can write the full model as JSON for other tools.
+data, thus the tool can write the full model as JSON for other tools. The rules
+that read a name are in `naming`.
 """
 
 from __future__ import annotations
 
 import dataclasses
-import re
 from dataclasses import dataclass, field
 from typing import Any
 
-
-def _is_clock(name: str) -> bool:
-    n = name.lower()
-    return "clk" in n or "clock" in n
-
-
-def _is_reset(name: str) -> bool:
-    n = name.lower()
-    return "rst" in n or "reset" in n
-
-
-_OUT_MODPORTS = {"source", "initiator", "master", "mst", "out", "producer", "manager"}
-_IN_MODPORTS = {"sink", "subordinate", "slave", "slv", "in", "consumer", "target"}
-
-
-def interface_dir(modport: str) -> str:
-    """The direction of an interface port, from the name of its modport."""
-    m = (modport or "").lower()
-    if m in _OUT_MODPORTS:
-        return "out"
-    if m in _IN_MODPORTS:
-        return "in"
-    return "inout"
-
-
-#: The name endings that give a direction. The longer ending comes first.
-_DIR_SUFFIX = (("_in", "in"), ("_out", "out"), ("_i", "in"), ("_o", "out"))
-
-
-def name_direction(name: str) -> str:
-    """The direction that the name of a port gives, or `` if it gives none."""
-    n = name.lower()
-    for suffix, direction in _DIR_SUFFIX:
-        if n.endswith(suffix):
-            return direction
-    return ""
-
-
-def graph_dir(port) -> str:
-    """The direction to draw: `in`, `out`, or `` for a port with no direction.
-
-    The language gives the direction of a logic port. An interface port has no
-    direction: the name gives it, and then the modport. An interface port with
-    no other data goes in two directions.
-    """
-    if not port.is_interface:
-        if port.direction in ("in", "out"):
-            return port.direction
-        return name_direction(port.name)
-    named = name_direction(port.name)
-    if named:
-        return named
-    modport = interface_dir(port.modport)
-    return modport if modport in ("in", "out") else ""
-
-
-def reset_polarity(name: str) -> str:
-    """The polarity of a reset port, from its name."""
-    n = name.lower()
-    if re.search(r"(rst|reset)_?n", n) or n.endswith("n") or n.endswith("ni") or "_nb" in n:
-        return "active-low"
-    if re.search(r"(rst|reset)_?b", n) or n.endswith("b"):
-        return "active-low"
-    return "active-high"
+from .naming import interface_dir, is_clock, is_reset, name_direction
 
 
 @dataclass
@@ -106,6 +43,24 @@ class Port:
     def eff_dir(self) -> str:
         """The direction to group by. An interface port uses its modport."""
         return interface_dir(self.modport) if self.is_interface else self.direction
+
+    @property
+    def graph_dir(self) -> str:
+        """The direction to draw: `in`, `out`, or `` for a port with no direction.
+
+        The language gives the direction of a logic port. An interface port has
+        no direction: the name gives it, and then the modport. An interface port
+        with no other data goes in two directions.
+        """
+        if not self.is_interface:
+            if self.direction in ("in", "out"):
+                return self.direction
+            return name_direction(self.name)
+        named = name_direction(self.name)
+        if named:
+            return named
+        modport = interface_dir(self.modport)
+        return modport if modport in ("in", "out") else ""
 
 
 @dataclass
@@ -164,11 +119,11 @@ class Module:
 
     @property
     def clocks(self) -> list[Port]:
-        return [p for p in self.ports if _is_clock(p.name)]
+        return [p for p in self.ports if is_clock(p.name)]
 
     @property
     def resets(self) -> list[Port]:
-        return [p for p in self.ports if _is_reset(p.name)]
+        return [p for p in self.ports if is_reset(p.name)]
 
     @property
     def module_instances(self) -> list[Instance]:

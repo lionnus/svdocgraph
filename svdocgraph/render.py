@@ -14,9 +14,10 @@ from datetime import datetime, timezone
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from . import __version__, docs, graphs, project, source
+from . import __version__, docs, graphs, markup, project, source
+from .dot import render_dot
 from .model import Design, Module
-from .model import reset_polarity as model_reset_polarity
+from .naming import reset_polarity
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _TEMPLATES = os.path.join(_HERE, "templates")
@@ -66,7 +67,7 @@ class Renderer:
                           or "design"),
         )
         self.env.filters["dirbadge"] = _dirbadge
-        self.env.filters["reset_polarity"] = model_reset_polarity
+        self.env.filters["reset_polarity"] = reset_polarity
 
     def _nav(self) -> list[dict]:
         """The side bar. The modules are in groups by package."""
@@ -134,7 +135,7 @@ class Renderer:
 
     def _load_docs(self) -> None:
         """Reads the Markdown files of the repository and makes HTML from them."""
-        if not self.with_docs or not docs.HAVE_MARKDOWN or not self.design.project_root:
+        if not self.with_docs or not markup.HAVE_MARKDOWN or not self.design.project_root:
             return
         rel_paths = docs.find_files(self.design.project_root, self.doc_dirs)
         pages, media = docs.build_pages(self.design.project_root, rel_paths)
@@ -142,7 +143,7 @@ class Renderer:
         # A link to a unit makes the text navigable.
         targets = self._xref_targets
         for page in pages.values():
-            page.html = docs.link_names(page.html, targets)
+            page.html = markup.link_names(page.html, targets)
             if page.module:
                 self.design.modules[page.module].doc_page = page.slug
         self.design.doc_pages = pages
@@ -263,21 +264,21 @@ class Renderer:
             "tops": len(d.tops),
             "packages": len(d.packages),
         }
-        svg = _responsive(graphs.render_dot(graphs.hierarchy_dot(d, max_nodes=60)))
+        svg = _responsive(render_dot(graphs.hierarchy_dot(d, max_nodes=60)))
         html = self.env.get_template("index.html").render(
             **self._ctx(stats=stats, hierarchy_svg=svg, active="index")
         )
         self._write("index.html", html)
 
     def _render_hierarchy(self) -> None:
-        svg = _responsive(graphs.render_dot(graphs.hierarchy_dot(self.design)))
+        svg = _responsive(render_dot(graphs.hierarchy_dot(self.design)))
         html = self.env.get_template("hierarchy.html").render(
             **self._ctx(hierarchy_svg=svg, active="hierarchy")
         )
         self._write("hierarchy.html", html)
 
     def _render_packages(self) -> None:
-        svg = _responsive(graphs.render_dot(graphs.package_dot(self.design)))
+        svg = _responsive(render_dot(graphs.package_dot(self.design)))
         html = self.env.get_template("packages.html").render(
             **self._ctx(package_svg=svg, active="packages")
         )
@@ -286,10 +287,10 @@ class Renderer:
     def _render_module(self, name: str) -> None:
         mod = self.design.modules[name]
         # The comment above the declaration is Markdown or reStructuredText.
-        comment_html = docs.link_names(docs.render_comment(mod.doc_comment),
+        comment_html = markup.link_names(markup.render_comment(mod.doc_comment),
                                        self._xref_targets) if mod.doc_comment else ""
         dot = graphs.internal_dot(self.design, name)
-        svg = _responsive(graphs.render_dot(dot)) if dot else None
+        svg = _responsive(render_dot(dot)) if dot else None
         ports = {"in": [], "out": [], "inout": []}
         for p in mod.ports:
             ports.get(p.eff_dir, ports["inout"]).append(p)
@@ -314,7 +315,7 @@ class Renderer:
                 rows.append({"path": rel, "units": sorted(m.name for m in mods),
                              "package": mods[0].package, "url": "", "lines": 0})
         html = self.env.get_template("files.html").render(
-            **self._ctx(file_svg=_responsive(graphs.render_dot(self._file_dot)),
+            **self._ctx(file_svg=_responsive(render_dot(self._file_dot)),
                         rows=rows, active="files")
         )
         self._write("files.html", html)

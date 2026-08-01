@@ -178,6 +178,22 @@ workflows of this repository use the same command as a user does.
 - The HTML in a Markdown file is escaped, not written into the page.
 - The file graph shows each source file and the files that it needs.
 
+### The package layout
+
+- 17 modules, each with one subject, and no module above 370 lines. The layers
+  are in the docstring of `svdocgraph/__init__.py`, from `naming` and `model` at
+  the bottom to `cli` at the top.
+- `tests/test_architecture.py` reads the imports of each module and stops a
+  module that imports from a higher layer. Before this rule, `deps` imported
+  `extract` to find out if pyslang was usable; `deps` now makes that test itself.
+- `svdocgraph.build_documentation` and `svdocgraph.check_site` give the two
+  commands to another program. `__getattr__` imports on demand, thus
+  `svdocgraph --version` does not load pyslang.
+- The splits: `naming` (the rules that read a name) out of `model`; `comments`
+  (the comment above a unit) out of `extract`; `markup` (Markdown,
+  reStructuredText and Doxygen) out of `docs`; `dot` (the colours, the DOT syntax
+  and the Graphviz process) out of `graphs`; `api` (the two steps) out of `cli`.
+
 ## Known limitations
 
 - Clock and reset nets are detected by name pattern, not by tracing clock trees.

@@ -87,7 +87,7 @@ def test_check_all_covers_every_requirement():
 
 def test_an_unusable_pyslang_is_reported(monkeypatch):
     """pyslang is installed, but its version has no driver that the tool can use."""
-    monkeypatch.setattr("svdocgraph.extract.HAVE_PYSLANG", False)
+    monkeypatch.setattr("svdocgraph.deps.HAVE_PYSLANG", False)
     dep = deps.check_pyslang()
     assert not dep.ok and dep.required
     assert "Driver" in dep.detail

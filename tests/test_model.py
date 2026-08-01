@@ -4,16 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from svdocgraph.model import (
-    Design,
-    Instance,
-    Module,
-    Port,
-    graph_dir,
-    interface_dir,
-    name_direction,
-    reset_polarity,
-)
+from svdocgraph.model import Design, Instance, Module, Port
+from svdocgraph.naming import interface_dir, reset_polarity
 
 
 @pytest.mark.parametrize(
@@ -76,37 +68,3 @@ def test_design_is_json_serialisable():
     d.modules["m"] = Module(name="m", ports=[Port("a", "in", width=8)])
     payload = d.to_json()
     assert json.loads(json.dumps(payload))["modules"]["m"]["ports"][0]["width"] == 8
-
-
-# -- the direction that a name gives ----------------------------------------
-
-
-def test_the_name_of_a_port_can_give_the_direction():
-    assert name_direction("data_i") == "in"
-    assert name_direction("data_in") == "in"
-    assert name_direction("flags_o") == "out"
-    assert name_direction("data_out") == "out"
-    assert name_direction("tcdm") == ""
-    assert name_direction("rst_ni") == "", "a reset is not an input by name"
-
-
-def test_the_declaration_gives_the_direction_of_a_logic_port():
-    assert graph_dir(Port("data_o", "in")) == "in", "the language wins"
-    assert graph_dir(Port("bus", "inout")) == ""
-    assert graph_dir(Port("bus_i", "inout")) == "in"
-
-
-def test_an_interface_port_takes_the_direction_from_the_name_first():
-    port = Port("data_in", "interface", is_interface=True, modport="source")
-    assert interface_dir("source") == "out", "the modport says the other way"
-    assert graph_dir(port) == "in"
-
-
-def test_an_interface_port_with_no_name_ending_uses_the_modport():
-    port = Port("bus", "interface", is_interface=True, modport="slave")
-    assert graph_dir(port) == "in"
-
-
-def test_an_interface_port_with_no_direction_at_all():
-    port = Port("tcdm", "interface", is_interface=True, modport="")
-    assert graph_dir(port) == ""

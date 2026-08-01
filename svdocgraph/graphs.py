@@ -1,10 +1,9 @@
 """Makes the graphs.
 
-Each function writes Graphviz DOT. Graphviz then calculates the layout and gives
-SVG. The nodes contain links, thus the reader can move through the design.
-
-There are three graphs: the contents of one module, the design hierarchy, and the
-Bender packages.
+Each function gives Graphviz DOT for one view of the design: the contents of one
+module, the design hierarchy, the source files and the Bender packages. A node
+contains a link, thus the reader can move through the design. `dot` holds the
+colours, the DOT syntax and the Graphviz process.
 """
 
 from __future__ import annotations
@@ -12,67 +11,30 @@ from __future__ import annotations
 import html
 import os
 import re
-import shutil
-import subprocess
 
-from .model import Design, _is_clock, _is_reset, graph_dir
-
-# The colours. Each fill is solid. There are no borders and no round corners.
-C_OWNED = "#2563eb"     # Modules of the root package
-C_TOP = "#7c3aed"       # Design tops
-C_DEP = "#e2e8f0"       # Modules of a dependency, and black boxes
-C_DEP_TXT = "#334155"
-C_IFACE = "#0d9488"     # Interfaces
-C_NET = "#ffffff"       # Signal nodes
-C_NET_TXT = "#475569"
-# The pins of the module. The colour gives the kind, the shape gives the
-# direction. These are the colours of the port table, thus the two agree.
-C_IN = "#2563eb"        # An input
-C_OUT = "#c81d77"       # An output
-C_IO = "#b45309"        # No direction: the signals go both ways
-
-# `cds` draws about two thirds of the height of its node, and `hexagon` draws the
-# full height. These values give each pin and each signal the same height.
-PIN_CDS = 'shape=cds, height=0.37, margin="0.16,0.0"'
-PIN_HEX = 'shape=hexagon, height=0.25, margin="0.16,0.0"'
-NET_BOX = 'shape=box, height=0.25, margin="0.10,0.0"'
-C_CLUSTER = "#f1f5f9"   # Fill of the module boundary
-C_CLUSTER_LINE = "#cbd5e1"
-EDGE = "#94a3b8"
-FONT = "IBM Plex Sans"
-FONT_MONO = "IBM Plex Mono"
-
-
-def have_dot() -> bool:
-    return shutil.which("dot") is not None
-
-
-def render_dot(dot: str) -> str | None:
-    if not have_dot():
-        return None
-    try:
-        out = subprocess.run(
-            ["dot", "-Tsvg"], input=dot, capture_output=True, text=True, check=True
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return None
-    svg = out.stdout
-    i = svg.find("<svg")
-    return svg[i:] if i >= 0 else svg
-
-
-def _header(rankdir: str = "TB") -> str:
-    return (
-        "digraph G {\n"
-        f"  rankdir={rankdir};\n"
-        '  bgcolor="transparent";\n'
-        f'  graph [fontname="{FONT}"];\n'
-        f'  node [shape=box, style=filled, penwidth=0, fontname="{FONT}", '
-        'fontsize=11, margin="0.16,0.07"];\n'
-        f'  edge [color="{EDGE}", penwidth=1.0, arrowsize=0.6, fontname="{FONT}", '
-        f'fontsize=9, fontcolor="{C_NET_TXT}"];\n'
-        "  nodesep=0.30; ranksep=0.55;\n"
-    )
+from .dot import (
+    C_CLUSTER,
+    C_CLUSTER_LINE,
+    C_DEP,
+    C_DEP_TXT,
+    C_IFACE,
+    C_IN,
+    C_IO,
+    C_NET,
+    C_NET_TXT,
+    C_OUT,
+    C_OWNED,
+    C_TOP,
+    FONT,
+    FONT_MONO,
+    NET_BOX,
+    PIN_CDS,
+    PIN_HEX,
+    edge,
+    header,
+)
+from .model import Design
+from .naming import is_clock, is_reset
 
 
 def _mod_node(design: Design, name: str, *, focus: bool = False) -> str:
@@ -99,17 +61,6 @@ def _link(design: Design, unit: str) -> str:
     if not unit or unit not in design.modules:
         return ""
     return f'href="module-{unit}.html", target="_top", tooltip="{html.escape(unit)}", '
-
-
-def _edge(a: str, b: str, label: str = "", directed: bool = True) -> str:
-    extra = []
-    if label:
-        extra.append(f'label="{html.escape(label)}"')
-    if not directed:
-        extra.append("dir=none")
-    if extra:
-        return f'  "{a}" -> "{b}" [{", ".join(extra)}];'
-    return f'  "{a}" -> "{b}";'
 
 
 # --- internal netlist -------------------------------------------------------
@@ -165,7 +116,7 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
     nets: dict[str, list[tuple[str, str]]] = {}
 
     def add(net: str, node: str, role: str) -> None:
-        if _is_clock(net) or _is_reset(net):
+        if is_clock(net) or is_reset(net):
             return
         nets.setdefault(net, []).append((node, role))
 
@@ -183,12 +134,12 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
     # interface links to the declaration of that interface.
     iface_of = {i.name: i.module for i in mod.interface_instances}
 
-    # A boundary port joins the net that has its name. `graph_dir` gives `in`,
-    # `out` or `` for a port with no direction.
+    # A boundary port joins the net that has its name. `Port.graph_dir` gives
+    # `in`, `out` or `` for a port with no direction.
     boundary: dict[str, dict] = {}
     for p in mod.ports:
-        if p.name in nets and not (_is_clock(p.name) or _is_reset(p.name)):
-            d = graph_dir(p)
+        if p.name in nets and not (is_clock(p.name) or is_reset(p.name)):
+            d = p.graph_dir
             role = "driver" if d == "in" else ("load" if d == "out" else "both")
             boundary[p.name] = {
                 "dir": d,
@@ -202,7 +153,7 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
 
     kept_nets = sorted(nets)[:max_nodes]
 
-    lines = [_header("LR")]
+    lines = [header("LR")]
     # Boundary ports sit outside the module block, like external pins. A boundary
     # port doubles as the hub for its net, so no separate signal node is drawn.
     for net in kept_nets:
@@ -259,11 +210,11 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
         hub = f"p__{net}" if net in boundary else f"n__{net}"
         for node, role in {(n, r) for n, r in nets[net] if not n.startswith("p__")}:
             if role == "driver":
-                lines.append(_edge(node, hub))
+                lines.append(edge(node, hub))
             elif role == "load":
-                lines.append(_edge(hub, node))
+                lines.append(edge(hub, node))
             else:
-                lines.append(_edge(hub, node, directed=False))
+                lines.append(edge(hub, node, directed=False))
     lines.append("}")
     return "\n".join(lines)
 
@@ -274,7 +225,7 @@ def hierarchy_dot(design: Design, max_nodes: int = 140) -> str:
     roots = design.tops or [
         n for n, m in design.modules.items() if m.package == design.root_package
     ]
-    lines = [_header("LR")]
+    lines = [header("LR")]
     seen: set[str] = set()
     edges: set[tuple[str, str]] = set()
     queue = list(roots)
@@ -293,13 +244,13 @@ def hierarchy_dot(design: Design, max_nodes: int = 140) -> str:
     for name in sorted(seen):
         lines.append(f'  "{name}" {_mod_node(design, name)};')
     for a, b in sorted(edges):
-        lines.append(_edge(a, b))
+        lines.append(edge(a, b))
     lines.append("}")
     return "\n".join(lines)
 
 
 def package_dot(design: Design) -> str:
-    lines = [_header("LR")]
+    lines = [header("LR")]
     for name, pkg in sorted(design.packages.items()):
         fill = C_OWNED if pkg.root else C_DEP
         txt = "white" if pkg.root else C_DEP_TXT
@@ -310,7 +261,7 @@ def package_dot(design: Design) -> str:
     for name, pkg in sorted(design.packages.items()):
         for dep in pkg.deps:
             if dep in design.packages:
-                lines.append(_edge(name, dep))
+                lines.append(edge(name, dep))
     lines.append("}")
     return "\n".join(lines)
 
@@ -359,7 +310,7 @@ def file_dot(design: Design, max_nodes: int = 120) -> str:
     # The node of a file opens the code of that file.
     urls = {s.rel_path: s.url for s in design.sources.values()}
 
-    lines = [_header("LR")]
+    lines = [header("LR")]
     for f in keep:
         is_owned = f in owned
         fill = C_OWNED if is_owned else C_DEP
@@ -372,6 +323,6 @@ def file_dot(design: Design, max_nodes: int = 120) -> str:
         )
     for a, b in sorted(edges):
         if a in kept and b in kept:
-            lines.append(_edge(a, b))
+            lines.append(edge(a, b))
     lines.append("}")
     return "\n".join(lines)

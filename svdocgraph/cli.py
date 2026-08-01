@@ -12,10 +12,10 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-import tempfile
 import webbrowser
 
-from . import __version__, bender, check, deps, extract, project
+from . import __version__, api, check, deps, project
+from .api import BenderFailed
 from .render import render_site
 
 QUIET = False
@@ -64,28 +64,13 @@ class Ctx:
         return rel if not rel.startswith("..") else self.outdir
 
 
-class BenderFailed(Exception):
-    """bender could not describe the project. The message comes from bender."""
-
-
 def _build_design(ctx: Ctx):
     _log(f"Project: {ctx.root}")
     if ctx.config.found:
         _log(f"Settings: {os.path.relpath(ctx.config.path, ctx.root)}")
-    info = bender.collect(ctx.root)
-    if info.failure:
-        raise BenderFailed(info.failure)
-    if info.root_package:
-        _log(f"Bender root package: \033[1m{info.root_package}\033[0m "
-             f"({len(info.root_files)} source files, {len(info.packages)} deps)")
-    else:
+    design = api.extract_design(ctx.root, tops=ctx.tops, log=_log)
+    if not design.root_package:
         _warn("No bender root package. Make sure that Bender.yml gives a name.")
-
-    with tempfile.TemporaryDirectory() as td:
-        cmd_file = bender.write_command_file(info, os.path.join(td, "sources.f")) or ""
-        _log("Elaboration with slang …")
-        design = extract.extract_design(ctx.root, info, cmd_file, extra_tops=ctx.tops)
-
     _ok(f"{len(design.modules)} modules "
         f"({sum(1 for m in design.modules.values() if m.package == design.root_package)} "
         f"in the root package), {len(design.tops)} tops")

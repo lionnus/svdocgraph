@@ -21,6 +21,15 @@ from dataclasses import dataclass
 PYSLANG_MIN = 11
 PYSLANG_MAX = 12    # exclusive
 
+# The `Driver` class is in `pyslang.driver` from version 11. An older version has
+# a different class that this tool cannot drive. `extract` reads both names.
+try:
+    from pyslang.driver import Driver
+    HAVE_PYSLANG = True
+except ImportError:  # pragma: no cover - depends on the installed pyslang
+    Driver = None
+    HAVE_PYSLANG = False
+
 BENDER_HINT = (
     "Install bender:  curl https://pulp-platform.github.io/bender/init -sSf | sh\n"
     "  As an option:  cargo install bender"
@@ -83,7 +92,6 @@ def check_pyslang() -> Dep:
     except ImportError:
         return Dep("pyslang", False, "not installed", PYSLANG_HINT)
     version = getattr(pyslang, "__version__", "unknown")
-    from .extract import HAVE_PYSLANG
     if not HAVE_PYSLANG:
         return Dep("pyslang", False,
                    f"version {version} has no Driver that this tool can use. "

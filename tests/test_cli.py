@@ -306,7 +306,7 @@ def test_gen_warns_but_continues_without_graphviz(run_cli, project_dir, stub_ben
     real = _shutil.which
     monkeypatch.setattr(deps.shutil, "which",
                         lambda name: None if name == "dot" else real(name))
-    monkeypatch.setattr("svdocgraph.graphs.have_dot", lambda: False)
+    monkeypatch.setattr("svdocgraph.dot.have_dot", lambda: False)
     assert _gen(run_cli, project_dir) == 0
     assert "The pages show no graphs" in capsys.readouterr().err
     assert (project_dir / project.DEFAULT_OUTPUT / "index.html").is_file()

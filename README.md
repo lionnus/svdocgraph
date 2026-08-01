@@ -32,26 +32,32 @@ documentation of the
 expand, the parameters resolve and the widths are calculated. Nothing is guessed
 from the source text.
 
-## Install
-
-`bender` and [Graphviz](https://graphviz.org/) must be on the `PATH`. A simulator
-is not necessary.
-
-```sh
-uv tool install svdocgraph      # or: pipx install svdocgraph
-```
-
 ## 1. Read a repository that you do not know
 
+Copy this into a terminal. Remove the lines for the tools that you have.
+
 ```sh
-cd some-bender-project
-bender checkout                 # only if the dependencies are not there yet
+# The tools. Graphviz is the only line that changes with the operating system.
+curl -LsSf https://astral.sh/uv/install.sh | sh              # uv
+curl https://pulp-platform.github.io/bender/init -sSf | sh   # bender
+sudo apt install -y graphviz                                 # macOS: brew install graphviz
+
+# SVDocGraph. This repository is not on PyPI, thus you clone it first.
+git clone https://github.com/lionnus/svdocgraph.git ~/svdocgraph
+uv tool install ~/svdocgraph        # or: pipx install ~/svdocgraph
+
+# The design. Use the path of any repository that has a Bender.yml.
+cd ~/my-bender-project
+bender checkout                     # only if the dependencies are not there yet
 svdocgraph gen --open
 ```
 
 The tool finds the nearest `Bender.yml`, elaborates each module of the root
 package, writes `.svdocgraph/` and opens it in the browser. It adds that
-directory to your `.gitignore`.
+directory to your `.gitignore`. A simulator is not necessary.
+
+To get a later version: `git -C ~/svdocgraph pull && uv tool install --force
+~/svdocgraph`.
 
 In the site: **Overview** gives the tops, **Hierarchy** gives the structure,
 **Files** gives the compile order and the code, and a module page gives the ports
@@ -85,6 +91,9 @@ because a design that no longer elaborates gives an empty site and no error.
 `--want-module`, `--min-interfaces` and `--max-diagnostics` make the condition
 stronger. `svdocgraph check --help` gives each option.
 
+In Python, the same two steps are `svdocgraph.build_documentation(root, out)`
+and `svdocgraph.check_site(out)`.
+
 Then let your CI job run `make docs` and publish `public/`. Each CI system
 publishes in a different way, thus this repository gives no configuration. The
 [`pages` workflow](.github/workflows/pages.yml) of this repository is one example
@@ -111,6 +120,13 @@ uv sync --extra dev
 uv run pytest          # A substitute for bender, thus the tests run anywhere
 uv run ruff check .
 ```
+
+Each module has one subject: `bender` reads the project, `extract` elaborates it,
+`comments` and `markup` read the text, `graphs` and `dot` draw, `render` writes
+the site. A module imports from a lower layer only;
+[`tests/test_architecture.py`](tests/test_architecture.py) holds that rule and
+the docstring of [`svdocgraph/__init__.py`](svdocgraph/__init__.py) gives the
+layers.
 
 Then open a pull request. CI runs `ruff`, the tests on Python 3.9 to 3.13, and
 the coverage measurement. It then makes the documentation of two real designs,

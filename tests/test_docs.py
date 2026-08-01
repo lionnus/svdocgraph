@@ -6,9 +6,9 @@ import os
 
 import pytest
 
-from svdocgraph import docs
+from svdocgraph import docs, markup
 
-pytestmark = pytest.mark.skipif(not docs.HAVE_MARKDOWN, reason="markdown-it-py absent")
+pytestmark = pytest.mark.skipif(not markup.HAVE_MARKDOWN, reason="markdown-it-py absent")
 
 
 # -- discovery -------------------------------------------------------------
@@ -130,7 +130,7 @@ def test_a_page_attaches_to_the_module_with_the_same_name(built):
 
 def test_the_name_of_a_unit_becomes_a_link(built):
     pages, _ = built
-    html = docs.link_names(pages["doc-readme"].html,
+    html = markup.link_names(pages["doc-readme"].html,
                            {"demo_top": "module-demo_top.html"})
     assert '<a class="xref" href="module-demo_top.html"><code>demo_top</code></a>' in html
     assert "<code>demo_adder</code>" in html, "an unknown name stays as it is"
@@ -150,7 +150,7 @@ def test_the_readme_is_first_in_the_sequence(built):
 
 # -- reStructuredText ------------------------------------------------------
 
-rst = pytest.mark.skipif(not docs.HAVE_RST, reason="docutils absent")
+rst = pytest.mark.skipif(not markup.HAVE_RST, reason="docutils absent")
 
 RST_PAGE = """\
 =================
@@ -233,8 +233,8 @@ def test_the_name_of_a_module_becomes_a_link_in_a_rst_page(tmp_path):
     (tmp_path / "b.rst").write_text("T\n=\n\n`demo_adder` with one backtick.\n")
     pages, _ = docs.build_pages(str(tmp_path), ["a.rst", "b.rst"])
     targets = {"demo_adder": "module-demo_adder.html"}
-    assert 'href="module-demo_adder.html"' in docs.link_names(pages["doc-a"].html, targets)
-    assert 'href="module-demo_adder.html"' in docs.link_names(pages["doc-b"].html, targets)
+    assert 'href="module-demo_adder.html"' in markup.link_names(pages["doc-a"].html, targets)
+    assert 'href="module-demo_adder.html"' in markup.link_names(pages["doc-b"].html, targets)
 
 
 # -- the Read the Docs settings --------------------------------------------
@@ -274,23 +274,23 @@ def test_no_read_the_docs_file_gives_no_directory(tmp_path):
 
 
 def test_a_comment_with_a_directive_is_restructuredtext():
-    html = docs.render_comment("The module moves data.\n\n.. figure:: img/a.png\n")
+    html = markup.render_comment("The module moves data.\n\n.. figure:: img/a.png\n")
     assert "<p>The module moves data.</p>" in html
 
 
 def test_a_comment_without_a_directive_is_markdown():
-    html = docs.render_comment("The **module** moves `data`.\n")
+    html = markup.render_comment("The **module** moves `data`.\n")
     assert "<strong>module</strong>" in html and "<code>data</code>" in html
 
 
 def test_an_empty_comment_gives_no_html():
-    assert docs.render_comment("   \n") == ""
+    assert markup.render_comment("   \n") == ""
 
 
 def test_a_name_in_bold_becomes_a_link():
     """The comments in the PULP repositories put the name of a module in bold."""
-    html = docs.render_comment("The **demo_adder** adds. **Name** is not a module.")
-    linked = docs.link_names(html, {"demo_adder": "module-demo_adder.html"})
+    html = markup.render_comment("The **demo_adder** adds. **Name** is not a module.")
+    linked = markup.link_names(html, {"demo_adder": "module-demo_adder.html"})
     assert '<a class="xref" href="module-demo_adder.html"><code>demo_adder</code></a>' in linked
     assert "<strong>Name</strong>" in linked
 
@@ -300,7 +300,7 @@ def test_a_name_in_bold_becomes_a_link():
 
 def test_a_comment_with_the_doxygen_commands():
     """Doxygen has no parser for SystemVerilog, but the commands are common."""
-    html = docs.render_comment(
+    html = markup.render_comment(
         "@brief A round-robin arbiter.\n\n"
         "@param NumIn The number of inputs.\n"
         "@param DataWidth The width of the data.\n"
@@ -316,17 +316,17 @@ def test_a_comment_with_the_doxygen_commands():
 
 
 def test_the_doxygen_commands_also_start_with_a_backslash():
-    html = docs.render_comment("\\brief A counter.\n\\warning It has no reset.\n")
+    html = markup.render_comment("\\brief A counter.\n\\warning It has no reset.\n")
     assert "<p>A counter.</p>" in html or "A counter." in html
     assert "<strong>Warning:</strong>" in html
 
 
 def test_the_doxygen_marks_for_emphasis():
-    md = docs.doxygen_to_markdown("@b bold @a italic @p code @c also_code")
+    md = markup.doxygen_to_markdown("@b bold @a italic @p code @c also_code")
     assert md == "**bold** *italic* `code` `also_code`"
 
 
 def test_a_comment_without_a_command_is_not_doxygen():
     """A mail address has an `@`, but it is not a command."""
-    html = docs.render_comment("Ask anna@example.com about the **timing**.")
+    html = markup.render_comment("Ask anna@example.com about the **timing**.")
     assert "anna@example.com" in html and "<strong>timing</strong>" in html

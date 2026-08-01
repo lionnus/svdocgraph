@@ -5,7 +5,17 @@ from __future__ import annotations
 import pytest
 from conftest import needs_dot
 
+from svdocgraph import dot as dotlib
 from svdocgraph import graphs
+from svdocgraph.dot import (
+    C_DEP,
+    C_IFACE,
+    C_IN,
+    C_OWNED,
+    C_TOP,
+    edge,
+    render_dot,
+)
 from svdocgraph.model import BenderPackage, Design, Instance, Module, Port, PortConn
 
 
@@ -78,7 +88,7 @@ def test_package_graph_marks_the_root_and_its_dependencies(design):
     dot = graphs.package_dot(design)
     assert "package-demo_ip.html" in dot
     assert '"demo_ip" -> "common_cells"' in dot
-    assert graphs.C_OWNED in dot, "the root package uses the accent colour"
+    assert C_OWNED in dot, "the root package uses the accent colour"
 
 
 def test_net_base_strips_selects_and_concatenations():
@@ -90,20 +100,20 @@ def test_net_base_strips_selects_and_concatenations():
 
 @needs_dot
 def test_render_dot_produces_svg(design):
-    svg = graphs.render_dot(graphs.hierarchy_dot(design))
+    svg = render_dot(graphs.hierarchy_dot(design))
     assert svg is not None
     assert svg.lstrip().startswith("<svg")
     assert "adder" in svg
 
 
 def test_render_dot_returns_none_without_graphviz(monkeypatch, design):
-    monkeypatch.setattr(graphs.shutil, "which", lambda _: None)
-    assert graphs.render_dot(graphs.hierarchy_dot(design)) is None
+    monkeypatch.setattr(dotlib.shutil, "which", lambda _: None)
+    assert render_dot(graphs.hierarchy_dot(design)) is None
 
 
 def test_render_dot_returns_none_on_bad_dot(monkeypatch):
-    monkeypatch.setattr(graphs.shutil, "which", lambda _: "/usr/bin/dot")
-    assert graphs.render_dot("this is not dot at all {{{") is None
+    monkeypatch.setattr(dotlib.shutil, "which", lambda _: "/usr/bin/dot")
+    assert render_dot("this is not dot at all {{{") is None
 
 
 # -- node styling and connection roles --------------------------------------
@@ -116,21 +126,21 @@ def test_node_style_tells_the_module_classes_apart(design):
     dep = graphs._mod_node(design, "dep_mod")
     unknown = graphs._mod_node(design, "never_elaborated")
 
-    assert graphs.C_TOP in top, "a design top gets its own colour"
-    assert graphs.C_OWNED in owned
-    assert graphs.C_DEP in dep and "white" not in dep
+    assert C_TOP in top, "a design top gets its own colour"
+    assert C_OWNED in owned
+    assert C_DEP in dep and "white" not in dep
     assert "dashed" in unknown, "a black box is drawn dashed"
     assert 'href="module-never_elaborated.html"' in unknown
 
 
 def test_focus_highlights_a_module_that_is_not_a_top(design):
-    assert graphs.C_OWNED in graphs._mod_node(design, "adder", focus=True)
+    assert C_OWNED in graphs._mod_node(design, "adder", focus=True)
 
 
 def test_edges_carry_optional_labels_and_direction():
-    assert graphs._edge("a", "b") == '  "a" -> "b";'
-    assert 'label="net"' in graphs._edge("a", "b", label="net")
-    assert "dir=none" in graphs._edge("a", "b", directed=False)
+    assert edge("a", "b") == '  "a" -> "b";'
+    assert 'label="net"' in edge("a", "b", label="net")
+    assert "dir=none" in edge("a", "b", directed=False)
 
 
 def test_connection_role_follows_the_child_port_direction(design):
@@ -200,7 +210,7 @@ def test_the_file_graph_marks_a_file_of_a_dependency(design):
     design.modules["adder"].rel_file = "deps/adder.sv"
     design.modules["adder"].package = "common_cells"
     dot = graphs.file_dot(design)
-    assert graphs.C_DEP in dot, "a file of a dependency has another colour"
+    assert C_DEP in dot, "a file of a dependency has another colour"
 
 
 def test_the_file_graph_needs_a_file_for_each_module(design):
@@ -274,9 +284,9 @@ def test_each_interface_port_keeps_the_colour_of_an_interface(with_interface):
     dot = graphs.internal_dot(with_interface, "top")
     for pin in ("p__bus", "p__data_in", "p__tcdm"):
         attrs = dot.split(f'"{pin}" [')[1].split("]")[0]
-        assert graphs.C_IFACE in attrs, f"{pin} must have the interface colour"
+        assert C_IFACE in attrs, f"{pin} must have the interface colour"
     logic = dot.split('"p__x_i" [')[1].split("]")[0]
-    assert graphs.C_IN in logic and graphs.C_IFACE not in logic
+    assert C_IN in logic and C_IFACE not in logic
 
 
 def test_each_pin_and_signal_has_the_same_height(with_interface):
@@ -293,7 +303,7 @@ def test_an_interface_port_opens_its_declaration(with_interface):
 def test_a_signal_that_carries_an_interface_opens_its_declaration(with_interface):
     dot = graphs.internal_dot(with_interface, "top")
     assert '"n__stream" [shape=box, height=0.25, margin="0.10,0.0", href="module-demo_if.html"' in dot
-    assert graphs.C_IFACE in dot, "the interface has its own colour"
+    assert C_IFACE in dot, "the interface has its own colour"
 
 
 def test_a_signal_that_is_not_an_interface_has_no_link(with_interface):
