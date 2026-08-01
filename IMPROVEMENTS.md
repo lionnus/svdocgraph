@@ -66,6 +66,20 @@ workflows of this repository use the same command as a user does.
 - `svdocgraph.yml` (optional, written by `svdocgraph init`) sets the output
   directory, extra tops and the display name, so `make docs` needs no flags.
 
+### The release
+
+- A tag `v0.1.0` starts the `release` workflow. That workflow runs ruff and the
+  tests again, builds the wheel and the source distribution, installs the wheel
+  and runs it, and then publishes. PyPI keeps each version for ever, thus a
+  broken build must not go out.
+- PyPI trusts the workflow through OpenID Connect (Trusted Publishing). There is
+  no API token in the repository, and no secret to rotate. The `pypi` and
+  `testpypi` environments hold that trust.
+- The version is in `svdocgraph/__init__.py` only. `pyproject.toml` reads it with
+  `[tool.hatch.version]`, and the workflow stops if the tag gives another value.
+- A manual start of the workflow publishes to TestPyPI. Thus you can see the page
+  of the project before the true release.
+
 ### Dependencies
 
 - `bender` and Graphviz are external programs; `svdocgraph doctor` reports both,

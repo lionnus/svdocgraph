@@ -17,8 +17,8 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - run: uv run --extra dev ruff check .
@@ -32,8 +32,8 @@ jobs:
         # the newest one that pyslang gives a wheel for.
         python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - name: Install Graphviz
@@ -45,8 +45,8 @@ jobs:
     # The minimum is in pyproject.toml. It is also the number on the README badge.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - name: Install Graphviz
@@ -59,7 +59,7 @@ jobs:
       - name: Send the result to Codecov
         # CODECOV_TOKEN is a repository secret. An upload that fails stops this
         # job, because a silent failure looks the same as a working upload.
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         if: ${{ !cancelled() }}
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -78,7 +78,7 @@ jobs:
           print(f"- lines: {line:.1f}%")
           print(f"- branches: {branch:.1f}%")
           PY
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: coverage-xml
@@ -89,8 +89,8 @@ jobs:
     # wheel, installs it, and runs the installed command.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
       - name: Install Graphviz
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends graphviz
       - run: uv build
@@ -121,7 +121,7 @@ jobs:
           echo "$out"
           [ $rc -eq 3 ] || { echo "expected exit 3 without bender, got $rc"; exit 1; }
           echo "$out" | grep -q "cargo install bender" || { echo "no install hint"; exit 1; }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: dist
           path: dist/

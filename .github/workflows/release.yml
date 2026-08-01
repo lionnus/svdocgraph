@@ -1,0 +1,101 @@
+name: release
+
+# Publishes the package to PyPI.
+#
+# A tag `v0.1.0` publishes to PyPI. A manual start publishes to TestPyPI, thus
+# you can see the page of the project before the true release.
+#
+# There is no API token. PyPI trusts this workflow of this repository through
+# OpenID Connect, and gives it a token for one upload. The repository settings
+# must give an environment with the name `pypi`, and the PyPI project settings
+# must give a publisher for `release.yml` in that environment.
+#
+# The version is in `svdocgraph/__init__.py`. The tag must give the same value.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: The tag must give the version of the package
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(python3 - <<'PY'
+          import pathlib, re
+          text = pathlib.Path("svdocgraph/__init__.py").read_text()
+          print(re.search(r'__version__ = "([^"]+)"', text).group(1))
+          PY
+          )
+          tag="${GITHUB_REF_NAME#v}"
+          echo "tag $tag, package $version"
+          test "$tag" = "$version"
+
+      # PyPI keeps each version for ever. A broken build must not go out.
+      - name: Test
+        run: |
+          uv sync --extra dev
+          uv run ruff check .
+          uv run pytest -q
+
+      - name: Build
+        run: |
+          uv build
+          uvx twine check dist/*
+
+      - name: Install the wheel and run it
+        run: |
+          uv tool install --force dist/*.whl
+          "$HOME/.local/bin/svdocgraph" --version
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: dist
+          path: dist/
+
+  testpypi:
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/svdocgraph
+    permissions:
+      id-token: write        # For the token that OpenID Connect gives
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  pypi:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/svdocgraph
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

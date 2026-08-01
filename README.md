@@ -42,9 +42,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh              # uv
 curl https://pulp-platform.github.io/bender/init -sSf | sh   # bender
 sudo apt install -y graphviz                                 # macOS: brew install graphviz
 
-# SVDocGraph. This repository is not on PyPI, thus you clone it first.
-git clone https://github.com/lionnus/svdocgraph.git ~/svdocgraph
-uv tool install ~/svdocgraph        # or: pipx install ~/svdocgraph
+uv tool install svdocgraph          # or: pipx install svdocgraph
 
 # The design. Use the path of any repository that has a Bender.yml.
 cd ~/my-bender-project
@@ -56,8 +54,9 @@ The tool finds the nearest `Bender.yml`, elaborates each module of the root
 package, writes `.svdocgraph/` and opens it in the browser. It adds that
 directory to your `.gitignore`. A simulator is not necessary.
 
-To get a later version: `git -C ~/svdocgraph pull && uv tool install --force
-~/svdocgraph`.
+`uv tool upgrade svdocgraph` gets a later version. To read or change the code,
+clone this repository and install that directory:
+`uv tool install --force ~/svdocgraph`.
 
 In the site: **Overview** gives the tops, **Hierarchy** gives the structure,
 **Files** gives the compile order and the code, and a module page gives the ports
@@ -127,6 +126,12 @@ the site. A module imports from a lower layer only;
 [`tests/test_architecture.py`](tests/test_architecture.py) holds that rule and
 the docstring of [`svdocgraph/__init__.py`](svdocgraph/__init__.py) gives the
 layers.
+
+A tag makes a release: `svdocgraph/__init__.py` gives the version, and
+`git tag v0.2.0 && git push origin v0.2.0` starts the
+[`release` workflow](.github/workflows/release.yml). That workflow runs the tests
+again, builds the wheel, and publishes it to PyPI. PyPI trusts the workflow
+through OpenID Connect, thus there is no token.
 
 Then open a pull request. CI runs `ruff`, the tests on Python 3.9 to 3.13, and
 the coverage measurement. It then makes the documentation of two real designs,

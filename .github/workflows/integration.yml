@@ -70,9 +70,9 @@ jobs:
               --min-sources 5
     steps:
       - name: Check out svdocgraph
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
@@ -98,7 +98,7 @@ jobs:
         run: svdocgraph doctor
 
       - name: Check out ${{ matrix.repo }} @ ${{ matrix.ref }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ matrix.repo }}
           ref: ${{ matrix.ref }}
@@ -142,7 +142,7 @@ jobs:
 
       - name: Upload the generated site
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: svdocgraph-${{ matrix.name }}
           path: site/

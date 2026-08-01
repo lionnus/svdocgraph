@@ -36,9 +36,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out svdocgraph
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
@@ -59,7 +59,7 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Check out ${{ env.DEMO_REPO }} @ ${{ env.DEMO_REF }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ env.DEMO_REPO }}
           ref: ${{ env.DEMO_REF }}
@@ -82,7 +82,7 @@ jobs:
             --min-modules 18 --min-interfaces 3 --min-docs 1 --min-sources 8 \
             --want-interface hci_core_intf --want-module datamover_top
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: site
 
@@ -94,4 +94,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
